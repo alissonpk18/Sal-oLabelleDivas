@@ -317,3 +317,70 @@ function listarDespesas_() {
   }
   return out;
 }
+function resumoMensal_(e) {
+  const mesParam = e && e.parameter && e.parameter.mes;
+  if (!mesParam) {
+    return {
+      sucesso: false,
+      mensagem: 'Parâmetro "mes" (YYYY-MM) é obrigatório.'
+    };
+  }
+
+  const partes = mesParam.split('-');
+  if (partes.length !== 2) {
+    return {
+      sucesso: false,
+      mensagem: 'Parâmetro "mes" inválido. Use formato YYYY-MM.'
+    };
+  }
+
+  const ano = parseInt(partes[0], 10);
+  const mes = parseInt(partes[1], 10);
+  if (isNaN(ano) || isNaN(mes)) {
+    return {
+      sucesso: false,
+      mensagem: 'Parâmetro "mes" inválido. Use formato YYYY-MM.'
+    };
+  }
+
+  const inicio = new Date(ano, mes - 1, 1);
+  const fim    = new Date(ano, mes, 0);
+
+  let totalEntradas = 0;
+  let totalSaidas   = 0;
+
+  // ===== ENTRADAS (ATENDIMENTOS) =====
+  const shAt = getSheet_(ABA_ATENDIMENTOS);
+  const valsAt = shAt.getDataRange().getValues(); // inclui cabeçalho
+  for (let i = 1; i < valsAt.length; i++) {
+    const row  = valsAt[i];
+    const data = row[0];              // Col A = DATA
+    const val  = Number(row[3]) || 0; // Col D = VALOR_TOTAL
+
+    if (data instanceof Date && data >= inicio && data <= fim) {
+      totalEntradas += val;
+    }
+  }
+
+  // ===== SAÍDAS (DESPESAS) =====
+  const shDp = getSheet_(ABA_DESPESAS);
+  const valsDp = shDp.getDataRange().getValues();
+  for (let i = 1; i < valsDp.length; i++) {
+    const row  = valsDp[i];
+    const data = row[0];              // Col A = DATA
+    const val  = Number(row[3]) || 0; // Col D = VALOR
+
+    if (data instanceof Date && data >= inicio && data <= fim) {
+      totalSaidas += val;
+    }
+  }
+
+  return {
+    sucesso: true,
+    mes: mesParam,
+    totalEntradas: totalEntradas,
+    totalSaidas:   totalSaidas,
+    resultado:     totalEntradas - totalSaidas
+  };
+}
+
