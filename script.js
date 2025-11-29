@@ -4,7 +4,7 @@
  * # Validação: checar campos obrigatórios (nome, datas, valores, seleções) antes de enviar para a API
  * # Lógica: usar fetch(GET/POST) na URL do Apps Script → criar registros (cliente, serviço, atendimento) ou ler listas/resumos
  * # Saída: atualização das tabelas na tela e dos indicadores de resumo mensal, sempre refletindo o que está na planilha
- * # Versão 1.0 — 29/11/2025 / Mudança: criação da interface Bootstrap integrada à API já existente
+ * # Versão 1.1 — 29/11/2025 / Mudança: ajuste do campo ATIVO e melhoria na mensagem de erro do POST
  */
 
 // 1. CONFIGURAÇÃO PRINCIPAL
@@ -32,15 +32,13 @@ async function fetchJSON(url, options = {}) {
 
 // Inicialização
 document.addEventListener('DOMContentLoaded', () => {
-    // Registrar eventos
     document.getElementById('formCliente').addEventListener('submit', onSubmitCliente);
     document.getElementById('formServico').addEventListener('submit', onSubmitServico);
     document.getElementById('formAtendimento').addEventListener('submit', onSubmitAtendimento);
-    
+
     document.getElementById('mesResumo').addEventListener('change', carregarResumoMensal);
     document.getElementById('atServico').addEventListener('change', sugerirPrecoDoServico);
 
-    // Inicializar campo de mês e carregar dados
     inicializarMesResumo();
     carregarDadosIniciais();
 });
@@ -53,14 +51,11 @@ function inicializarMesResumo() {
 }
 
 async function carregarDadosIniciais() {
-    // Carregar em paralelo para agilizar, mas respeitando a ordem de dependência se houvesse
-    // Aqui podemos carregar tudo, pois as tabelas dependem dos caches que serão preenchidos
     await Promise.all([
         carregarClientes(),
         carregarServicos(),
         carregarAtendimentos()
     ]);
-    // Resumo depende do mês selecionado (já inicializado)
     await carregarResumoMensal();
 }
 
@@ -101,10 +96,12 @@ async function carregarResumoMensal() {
 
     const url = `${URL_API}?action=resumoMensal&mes=${encodeURIComponent(mes)}`;
     const data = await fetchJSON(url);
-    
-    // Atualiza indicadores
-    // A API deve retornar { totalEntradas, totalSaidas, resultado }
-    // Se não retornar, assume 0
+
+    if (!data.sucesso) {
+        console.warn('Erro ao carregar resumo mensal:', data.mensagem || data.erro);
+        return;
+    }
+
     const entradas = data.totalEntradas || 0;
     const saidas = data.totalSaidas || 0;
     const resultado = data.resultado || 0;
@@ -122,11 +119,13 @@ function preencherTabelaClientes() {
 
     cacheClientes.forEach(cliente => {
         const tr = document.createElement('tr');
-        // Ajuste conforme nomes de campos que a API retorna (flexibilidade)
+
         const nome = cliente.NOME || cliente.nome || '';
         const telefone = cliente.TELEFONE || cliente.telefone || '';
         const obs = cliente.OBSERVACOES || cliente.OBS || cliente.observacoes || '';
-        const dataCad = formatarDataSimples(cliente.DATA_CADASTRO || cliente.DATA_CAD || cliente.dataCadastro);
+        const dataCad = formatarDataSimples(
+            cliente.DATA_CADASTRO || cliente.DATA_CAD || cliente.dataCadastro
+        );
 
         tr.innerHTML = `
             <td>${escapeHTML(nome)}</td>
@@ -144,11 +143,22 @@ function preencherTabelaServicos() {
 
     cacheServicos.forEach(servico => {
         const tr = document.createElement('tr');
+
         const nome = servico.NOME_SERVICO || servico.NOME || servico.nomeServico || '';
         const categoria = servico.CATEGORIA || servico.categoria || '';
         const preco = parseFloat(servico.PRECO_BASE || servico.precoBase || 0);
         const ativo = servico.ATIVO || servico.ativo;
-        const ativoTexto = (ativo === true || ativo === 'true' || ativo === 'TRUE') ? 'Sim' : 'Não';
+
+        let ativoTexto = 'Não';
+        if (
+            ativo === true ||
+            ativo === 'true' ||
+            ativo === 'TRUE' ||
+            ativo === 'Sim' ||
+            ativo === 'SIM'
+        ) {
+            ativoTexto = 'Sim';
+        }
 
         tr.innerHTML = `
             <td>${escapeHTML(nome)}</td>
@@ -166,7 +176,7 @@ function preencherTabelaAtendimentos() {
 
     cacheAtendimentos.forEach(at => {
         const tr = document.createElement('tr');
-        
+
         const data = formatarDataSimples(at.DATA || at.data);
         const idCliente = at.ID_CLIENTE || at.idCliente;
         const idServico = at.ID_SERVICO || at.idServico;
@@ -174,13 +184,17 @@ function preencherTabelaAtendimentos() {
         const pgto = at.FORMA_PAGAMENTO || at.formaPagamento || '';
         const obs = at.OBSERVACOES || at.OBS || at.observacoes || '';
 
-        // Buscar nomes nos caches
-        // Comparação flexível (string vs number)
-        const clienteObj = cacheClientes.find(c => (c.ID_CLIENTE || c.idCliente) == idCliente);
+        const clienteObj = cacheClientes.find(
+            c => (c.ID_CLIENTE || c.idCliente) == idCliente
+        );
         const nomeCliente = clienteObj ? (clienteObj.NOME || clienteObj.nome) : 'Desconhecido';
 
-        const servicoObj = cacheServicos.find(s => (s.ID_SERVICO || s.idServico) == idServico);
-        const nomeServico = servicoObj ? (servicoObj.NOME_SERVICO || servicoObj.NOME || servicoObj.nomeServico) : 'Desconhecido';
+        const servicoObj = cacheServicos.find(
+            s => (s.ID_SERVICO || s.idServico) == idServico
+        );
+        const nomeServico = servicoObj
+            ? (servicoObj.NOME_SERVICO || servicoObj.NOME || servicoObj.nomeServico)
+            : 'Desconhecido';
 
         tr.innerHTML = `
             <td>${data}</td>
@@ -196,12 +210,13 @@ function preencherTabelaAtendimentos() {
 
 function preencherSelectClientes() {
     const select = document.getElementById('atCliente');
-    // Manter a primeira opção padrão
     select.innerHTML = '<option value="">Selecione um cliente...</option>';
 
     cacheClientes.forEach(c => {
         const id = c.ID_CLIENTE || c.idCliente;
         const nome = c.NOME || c.nome;
+        if (!id || !nome) return;
+
         const option = document.createElement('option');
         option.value = id;
         option.textContent = nome;
@@ -214,9 +229,10 @@ function preencherSelectServicos() {
     select.innerHTML = '<option value="">Selecione um serviço...</option>';
 
     cacheServicos.forEach(s => {
-        // Filtrar apenas ativos se desejar, mas o requisito não especifica, mostraremos todos
         const id = s.ID_SERVICO || s.idServico;
         const nome = s.NOME_SERVICO || s.NOME || s.nomeServico;
+        if (!id || !nome) return;
+
         const option = document.createElement('option');
         option.value = id;
         option.textContent = nome;
@@ -228,11 +244,13 @@ function sugerirPrecoDoServico() {
     const idServicoSelecionado = document.getElementById('atServico').value;
     if (!idServicoSelecionado) return;
 
-    const servico = cacheServicos.find(s => (s.ID_SERVICO || s.idServico) == idServicoSelecionado);
+    const servico = cacheServicos.find(
+        s => (s.ID_SERVICO || s.idServico) == idServicoSelecionado
+    );
     if (servico) {
         const preco = parseFloat(servico.PRECO_BASE || servico.precoBase || 0);
         if (preco > 0) {
-            document.getElementById('atValor').value = preco.toFixed(2); // Formato para input type="number" step="0.01"
+            document.getElementById('atValor').value = preco.toFixed(2);
         }
     }
 }
@@ -241,7 +259,7 @@ function sugerirPrecoDoServico() {
 
 async function onSubmitCliente(event) {
     event.preventDefault();
-    
+
     const nome = document.getElementById('clienteNome').value.trim();
     const telefone = document.getElementById('clienteTelefone').value.trim();
     const obs = document.getElementById('clienteObs').value.trim();
@@ -253,8 +271,8 @@ async function onSubmitCliente(event) {
 
     const payload = {
         tipoRegistro: 'cliente',
-        nome: nome,
-        telefone: telefone,
+        nome,
+        telefone,
         observacoes: obs
     };
 
@@ -286,14 +304,13 @@ async function onSubmitServico(event) {
     const payload = {
         tipoRegistro: 'servico',
         nomeServico: nome,
-        categoria: categoria,
-        precoBase: precoBase,
-        ativo: ativo
+        categoria,
+        precoBase,
+        ativo
     };
 
     await enviarDados(payload, 'Serviço salvo com sucesso!', () => {
         document.getElementById('formServico').reset();
-        // Reset checkbox default
         document.getElementById('servicoAtivo').checked = true;
         carregarServicos();
     });
@@ -315,18 +332,18 @@ async function onSubmitAtendimento(event) {
     }
 
     const valorTotal = parseFloat(valorStr);
-    if (valorTotal <= 0) {
+    if (isNaN(valorTotal) || valorTotal <= 0) {
         alert('O valor deve ser maior que zero.');
         return;
     }
 
     const payload = {
         tipoRegistro: 'atendimento',
-        data: data, // YYYY-MM-DD
-        idCliente: idCliente,
-        idServico: idServico,
-        valorTotal: valorTotal,
-        formaPagamento: formaPagamento,
+        data,                 // YYYY-MM-DD
+        idCliente,
+        idServico,
+        valorTotal,
+        formaPagamento,
         observacoes: obs
     };
 
@@ -338,14 +355,6 @@ async function onSubmitAtendimento(event) {
 }
 
 async function enviarDados(payload, msgSucesso, callbackSucesso) {
-    // Apps Script requer POST com stringify. 
-    // Em alguns casos, é necessário usar 'no-cors' se não estiver configurado corretamente, 
-    // mas para receber resposta JSON (sucesso: true), o script deve suportar CORS.
-    // Assumindo que o script suporta CORS (retorna headers Access-Control-Allow-Origin).
-    
-    // Nota: O fetch padrão envia OPTIONS preflight. O Apps Script lida bem com text/plain para evitar preflight complexo,
-    // mas tentaremos application/json primeiro conforme padrão moderno.
-    
     const options = {
         method: 'POST',
         headers: {
@@ -354,22 +363,20 @@ async function enviarDados(payload, msgSucesso, callbackSucesso) {
         body: JSON.stringify(payload)
     };
 
-    // Usando fetchJSON mas tratando o modo de envio
-    // Se o Apps Script redirecionar, o fetch segue automaticamente.
-    
     try {
-        // Exibir loading ou desabilitar botões poderia ser feito aqui
         const data = await fetchJSON(URL_API, options);
-        
+
         if (data && data.sucesso) {
             alert(msgSucesso);
             if (callbackSucesso) callbackSucesso();
         } else {
-            alert('Erro ao salvar: ' + (data.erro || 'Resposta desconhecida da API'));
+            alert(
+                'Erro ao salvar: ' +
+                (data.mensagem || data.erro || 'Resposta desconhecida da API')
+            );
         }
     } catch (e) {
         console.error(e);
-        // Em caso de erro de rede ou CORS bloqueado sem resposta legível
         alert('Erro na comunicação. Verifique se a API permite acesso.');
     }
 }
@@ -384,15 +391,8 @@ function formatarMoeda(valor) {
 
 function formatarDataSimples(valor) {
     if (!valor) return '';
-    // Se vier do Google Sheets como string ISO data hora: 2023-11-29T12:00:00.000Z
-    // Ou apenas YYYY-MM-DD
     const data = new Date(valor);
-    if (isNaN(data.getTime())) return valor; // Retorna original se não for data válida
-
-    // Ajuste de fuso horário pode ser necessário dependendo de como o Sheets retorna.
-    // Vamos usar UTC methods para evitar deslocamento se a string for YYYY-MM-DD puro
-    // Mas se for new Date('2023-11-29'), o JS assume UTC e converte para local.
-    // Para simplificar visualização dd/mm/aaaa:
+    if (isNaN(data.getTime())) return valor;
     return data.toLocaleDateString('pt-BR');
 }
 
