@@ -1,15 +1,32 @@
+<!--
+Fluxograma resumido (HTML CRM):
+Entrada → usuário acessa a página no GitHub Pages
+Validação → navegação pelas seções (cadastro cliente, serviço, atendimento, resumo, tabelas)
+Lógica → Bootstrap organiza o layout; JavaScript (script.js) faz integrações com a API e preenche os dados
+Saída → interface para registrar e visualizar clientes, serviços, atendimentos e resumo financeiro
+Versão 1.2 — 29/11/2025 / Mudança: HTML reorganizado e comentado para o CRM Financeiro La Belle Divas
+-->
+
 <!DOCTYPE html>
 <html lang="pt-BR">
-
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>CRM Financeiro - La Belle Divas</title>
+
     <!-- Bootstrap 5 CSS -->
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link
+        href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
+        rel="stylesheet"
+    >
+
     <!-- Bootstrap Icons -->
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
-    <!-- Custom CSS -->
+    <link
+        rel="stylesheet"
+        href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css"
+    >
+
+    <!-- CSS customizado -->
     <link rel="stylesheet" href="style.css">
 </head>
 
@@ -18,46 +35,83 @@
     <!-- HEADER -->
     <header class="py-4 mb-5 shadow">
         <div class="container text-center text-md-start">
-            <h1 class="h2 mb-1"><i class="bi bi-gem me-2"></i>La Belle Divas</h1>
-            <p class="mb-0 opacity-75">CRM Financeiro & Controle de Atendimentos</p>
+            <h1 class="h2 mb-1">
+                <i class="bi bi-gem me-2"></i>
+                La Belle Divas
+            </h1>
+            <p class="mb-0 opacity-75">
+                CRM Financeiro &amp; Controle de Atendimentos
+            </p>
         </div>
     </header>
 
     <!-- MAIN CONTENT -->
     <main class="container my-3">
 
-        <!-- FORMS ROW -->
+        <!-- LINHA DE FORMULÁRIOS -->
         <div class="row g-4 mb-5">
 
             <!-- SEÇÃO 1: Cadastro de Cliente -->
             <div class="col-lg-4 col-md-6">
                 <div class="card h-100">
                     <div class="card-header">
-                        <h5 class="card-title text-primary-custom mb-0"><i class="bi bi-person-plus fs-4"></i> Novo
-                            Cliente</h5>
+                        <h5 class="card-title text-primary-custom mb-0">
+                            <i class="bi bi-person-plus fs-4"></i>
+                            Novo Cliente
+                        </h5>
                     </div>
                     <div class="card-body">
                         <form id="formCliente">
                             <div class="mb-3">
-                                <label for="clienteNome" class="form-label small text-muted text-uppercase fw-bold">Nome
-                                    Completo *</label>
-                                <input type="text" class="form-control" id="clienteNome" required
-                                    placeholder="Ex: Maria Silva">
+                                <label
+                                    for="clienteNome"
+                                    class="form-label small text-muted text-uppercase fw-bold"
+                                >
+                                    Nome Completo *
+                                </label>
+                                <input
+                                    type="text"
+                                    class="form-control"
+                                    id="clienteNome"
+                                    required
+                                    placeholder="Ex: Maria Silva"
+                                >
                             </div>
+
                             <div class="mb-3">
-                                <label for="clienteTelefone"
-                                    class="form-label small text-muted text-uppercase fw-bold">Telefone</label>
-                                <input type="text" class="form-control" id="clienteTelefone"
-                                    placeholder="(XX) XXXXX-XXXX">
+                                <label
+                                    for="clienteTelefone"
+                                    class="form-label small text-muted text-uppercase fw-bold"
+                                >
+                                    Telefone
+                                </label>
+                                <input
+                                    type="text"
+                                    class="form-control"
+                                    id="clienteTelefone"
+                                    placeholder="(XX) XXXXX-XXXX"
+                                >
                             </div>
+
                             <div class="mb-3">
-                                <label for="clienteObs"
-                                    class="form-label small text-muted text-uppercase fw-bold">Observações</label>
-                                <textarea class="form-control" id="clienteObs" rows="2"
-                                    placeholder="Preferências, alergias..."></textarea>
+                                <label
+                                    for="clienteObs"
+                                    class="form-label small text-muted text-uppercase fw-bold"
+                                >
+                                    Observações
+                                </label>
+                                <textarea
+                                    class="form-control"
+                                    id="clienteObs"
+                                    rows="2"
+                                    placeholder="Preferências, alergias..."
+                                ></textarea>
                             </div>
-                            <button type="submit" class="btn btn-primary-custom w-100"><i class="bi bi-save me-1"></i>
-                                Salvar Cliente</button>
+
+                            <button type="submit" class="btn btn-primary-custom w-100">
+                                <i class="bi bi-save me-1"></i>
+                                Salvar Cliente
+                            </button>
                         </form>
                     </div>
                 </div>
@@ -67,34 +121,78 @@
             <div class="col-lg-4 col-md-6">
                 <div class="card h-100">
                     <div class="card-header">
-                        <h5 class="card-title text-pink-custom mb-0"><i class="bi bi-scissors fs-4"></i> Novo Serviço
+                        <h5 class="card-title text-pink-custom mb-0">
+                            <i class="bi bi-scissors fs-4"></i>
+                            Novo Serviço
                         </h5>
                     </div>
                     <div class="card-body">
                         <form id="formServico">
                             <div class="mb-3">
-                                <label for="servicoNome" class="form-label small text-muted text-uppercase fw-bold">Nome
-                                    do Serviço *</label>
-                                <input type="text" class="form-control" id="servicoNome" required
-                                    placeholder="Ex: Corte Bordado">
+                                <label
+                                    for="servicoNome"
+                                    class="form-label small text-muted text-uppercase fw-bold"
+                                >
+                                    Nome do Serviço *
+                                </label>
+                                <input
+                                    type="text"
+                                    class="form-control"
+                                    id="servicoNome"
+                                    required
+                                    placeholder="Ex: Corte Bordado"
+                                >
                             </div>
+
                             <div class="mb-3">
-                                <label for="servicoCategoria"
-                                    class="form-label small text-muted text-uppercase fw-bold">Categoria</label>
-                                <input type="text" class="form-control" id="servicoCategoria" placeholder="Ex: Cabelo">
+                                <label
+                                    for="servicoCategoria"
+                                    class="form-label small text-muted text-uppercase fw-bold"
+                                >
+                                    Categoria
+                                </label>
+                                <input
+                                    type="text"
+                                    class="form-control"
+                                    id="servicoCategoria"
+                                    placeholder="Ex: Cabelo"
+                                >
                             </div>
+
                             <div class="mb-3">
-                                <label for="servicoPreco"
-                                    class="form-label small text-muted text-uppercase fw-bold">Preço Base (R$) *</label>
-                                <input type="number" class="form-control" id="servicoPreco" step="0.01" min="0" required
-                                    placeholder="0.00">
+                                <label
+                                    for="servicoPreco"
+                                    class="form-label small text-muted text-uppercase fw-bold"
+                                >
+                                    Preço Base (R$) *
+                                </label>
+                                <input
+                                    type="number"
+                                    class="form-control"
+                                    id="servicoPreco"
+                                    step="0.01"
+                                    min="0"
+                                    required
+                                    placeholder="0.00"
+                                >
                             </div>
+
                             <div class="mb-3 form-check">
-                                <input type="checkbox" class="form-check-input" id="servicoAtivo" checked>
-                                <label class="form-check-label" for="servicoAtivo">Disponível para agendamento</label>
+                                <input
+                                    type="checkbox"
+                                    class="form-check-input"
+                                    id="servicoAtivo"
+                                    checked
+                                >
+                                <label class="form-check-label" for="servicoAtivo">
+                                    Disponível para agendamento
+                                </label>
                             </div>
-                            <button type="submit" class="btn btn-pink-custom w-100"><i class="bi bi-save me-1"></i>
-                                Salvar Serviço</button>
+
+                            <button type="submit" class="btn btn-pink-custom w-100">
+                                <i class="bi bi-save me-1"></i>
+                                Salvar Serviço
+                            </button>
                         </form>
                     </div>
                 </div>
@@ -102,42 +200,92 @@
 
             <!-- SEÇÃO 3: Registro de Atendimento -->
             <div class="col-lg-4 col-md-12">
-                <div class="card h-100 border-2 border-primary-subtle"> <!-- Destaque sutil -->
+                <!-- Destaque sutil: borda e header colorido -->
+                <div class="card h-100 border-2 border-primary-subtle">
                     <div class="card-header bg-primary-subtle">
-                        <h5 class="card-title text-dark mb-0"><i class="bi bi-cash-coin fs-4 text-success"></i>
-                            Registrar Atendimento</h5>
+                        <h5 class="card-title text-dark mb-0">
+                            <i class="bi bi-cash-coin fs-4 text-success"></i>
+                            Registrar Atendimento
+                        </h5>
                     </div>
                     <div class="card-body">
                         <form id="formAtendimento">
                             <div class="mb-3">
-                                <label for="atData" class="form-label small text-muted text-uppercase fw-bold">Data
-                                    *</label>
-                                <input type="date" class="form-control" id="atData" required>
+                                <label
+                                    for="atData"
+                                    class="form-label small text-muted text-uppercase fw-bold"
+                                >
+                                    Data *
+                                </label>
+                                <input
+                                    type="date"
+                                    class="form-control"
+                                    id="atData"
+                                    required
+                                >
                             </div>
+
                             <div class="mb-3">
-                                <label for="atCliente"
-                                    class="form-label small text-muted text-uppercase fw-bold">Cliente *</label>
-                                <select class="form-select" id="atCliente" required>
+                                <label
+                                    for="atCliente"
+                                    class="form-label small text-muted text-uppercase fw-bold"
+                                >
+                                    Cliente *
+                                </label>
+                                <select
+                                    class="form-select"
+                                    id="atCliente"
+                                    required
+                                >
                                     <option value="">Selecione...</option>
                                 </select>
                             </div>
+
                             <div class="mb-3">
-                                <label for="atServico"
-                                    class="form-label small text-muted text-uppercase fw-bold">Serviço *</label>
-                                <select class="form-select" id="atServico" required>
+                                <label
+                                    for="atServico"
+                                    class="form-label small text-muted text-uppercase fw-bold"
+                                >
+                                    Serviço *
+                                </label>
+                                <select
+                                    class="form-select"
+                                    id="atServico"
+                                    required
+                                >
                                     <option value="">Selecione...</option>
                                 </select>
                             </div>
+
                             <div class="row">
                                 <div class="col-6 mb-3">
-                                    <label for="atValor"
-                                        class="form-label small text-muted text-uppercase fw-bold">Valor (R$) *</label>
-                                    <input type="number" class="form-control" id="atValor" step="0.01" min="0" required>
+                                    <label
+                                        for="atValor"
+                                        class="form-label small text-muted text-uppercase fw-bold"
+                                    >
+                                        Valor (R$) *
+                                    </label>
+                                    <input
+                                        type="number"
+                                        class="form-control"
+                                        id="atValor"
+                                        step="0.01"
+                                        min="0"
+                                        required
+                                    >
                                 </div>
                                 <div class="col-6 mb-3">
-                                    <label for="atFormaPgto"
-                                        class="form-label small text-muted text-uppercase fw-bold">Pagamento *</label>
-                                    <select class="form-select" id="atFormaPgto" required>
+                                    <label
+                                        for="atFormaPgto"
+                                        class="form-label small text-muted text-uppercase fw-bold"
+                                    >
+                                        Pagamento *
+                                    </label>
+                                    <select
+                                        class="form-select"
+                                        id="atFormaPgto"
+                                        required
+                                    >
                                         <option value="Dinheiro">Dinheiro</option>
                                         <option value="PIX">PIX</option>
                                         <option value="Débito">Débito</option>
@@ -145,13 +293,25 @@
                                     </select>
                                 </div>
                             </div>
+
                             <div class="mb-3">
-                                <label for="atObs"
-                                    class="form-label small text-muted text-uppercase fw-bold">Observações</label>
-                                <textarea class="form-control" id="atObs" rows="1"></textarea>
+                                <label
+                                    for="atObs"
+                                    class="form-label small text-muted text-uppercase fw-bold"
+                                >
+                                    Observações
+                                </label>
+                                <textarea
+                                    class="form-control"
+                                    id="atObs"
+                                    rows="1"
+                                ></textarea>
                             </div>
-                            <button type="submit" class="btn btn-success w-100 fw-bold"><i
-                                    class="bi bi-check-circle me-1"></i> Finalizar Atendimento</button>
+
+                            <button type="submit" class="btn btn-success w-100 fw-bold">
+                                <i class="bi bi-check-circle me-1"></i>
+                                Finalizar Atendimento
+                            </button>
                         </form>
                     </div>
                 </div>
@@ -161,44 +321,68 @@
         <!-- SEÇÃO 4: Resumo Mensal -->
         <div class="card mb-5">
             <div class="card-header d-flex justify-content-between align-items-center bg-white">
-                <h5 class="mb-0 text-dark"><i class="bi bi-graph-up-arrow me-2 text-primary"></i>Resumo Financeiro</h5>
-                <input type="month" id="mesResumo"
-                    class="form-control form-control-sm w-auto border-primary-subtle text-primary fw-bold">
+                <h5 class="mb-0 text-dark">
+                    <i class="bi bi-graph-up-arrow me-2 text-primary"></i>
+                    Resumo Financeiro
+                </h5>
+                <input
+                    type="month"
+                    id="mesResumo"
+                    class="form-control form-control-sm w-auto border-primary-subtle text-primary fw-bold"
+                >
             </div>
             <div class="card-body">
                 <div class="row text-center g-3">
                     <div class="col-md-4">
                         <div class="p-3 rounded bg-success-subtle h-100">
-                            <span class="d-block text-success small text-uppercase fw-bold mb-1">Entradas</span>
-                            <strong id="resumoEntradas" class="fs-3 text-success">R$ 0,00</strong>
+                            <span class="d-block text-success small text-uppercase fw-bold mb-1">
+                                Entradas
+                            </span>
+                            <strong id="resumoEntradas" class="fs-3 text-success">
+                                R$ 0,00
+                            </strong>
                         </div>
                     </div>
+
                     <div class="col-md-4">
                         <div class="p-3 rounded bg-danger-subtle h-100">
-                            <span class="d-block text-danger small text-uppercase fw-bold mb-1">Saídas</span>
-                            <strong id="resumoSaidas" class="fs-3 text-danger">R$ 0,00</strong>
+                            <span class="d-block text-danger small text-uppercase fw-bold mb-1">
+                                Saídas
+                            </span>
+                            <strong id="resumoSaidas" class="fs-3 text-danger">
+                                R$ 0,00
+                            </strong>
                         </div>
                     </div>
+
                     <div class="col-md-4">
                         <div class="p-3 rounded bg-primary-subtle h-100">
-                            <span class="d-block text-primary small text-uppercase fw-bold mb-1">Resultado
-                                Líquido</span>
-                            <strong id="resumoResultado" class="fs-3 text-primary">R$ 0,00</strong>
+                            <span class="d-block text-primary small text-uppercase fw-bold mb-1">
+                                Resultado Líquido
+                            </span>
+                            <strong id="resumoResultado" class="fs-3 text-primary">
+                                R$ 0,00
+                            </strong>
                         </div>
                     </div>
                 </div>
             </div>
         </div>
 
-        <!-- TABLES ROW -->
+        <!-- LINHA DE TABELAS -->
         <div class="row g-4">
 
             <!-- SEÇÃO 5: Tabela de Clientes -->
             <div class="col-md-6">
                 <div class="card h-100">
                     <div class="card-header bg-white d-flex justify-content-between align-items-center">
-                        <h6 class="mb-0 fw-bold text-primary-custom"><i class="bi bi-people me-2"></i>Clientes</h6>
-                        <span class="badge bg-light text-dark border">Lista Completa</span>
+                        <h6 class="mb-0 fw-bold text-primary-custom">
+                            <i class="bi bi-people me-2"></i>
+                            Clientes
+                        </h6>
+                        <span class="badge bg-light text-dark border">
+                            Lista Completa
+                        </span>
                     </div>
                     <div class="card-body p-0">
                         <div class="table-responsive" style="max-height: 300px;">
@@ -223,8 +407,13 @@
             <div class="col-md-6">
                 <div class="card h-100">
                     <div class="card-header bg-white d-flex justify-content-between align-items-center">
-                        <h6 class="mb-0 fw-bold text-pink-custom"><i class="bi bi-list-stars me-2"></i>Serviços</h6>
-                        <span class="badge bg-light text-dark border">Catálogo</span>
+                        <h6 class="mb-0 fw-bold text-pink-custom">
+                            <i class="bi bi-list-stars me-2"></i>
+                            Serviços
+                        </h6>
+                        <span class="badge bg-light text-dark border">
+                            Catálogo
+                        </span>
                     </div>
                     <div class="card-body p-0">
                         <div class="table-responsive" style="max-height: 300px;">
@@ -250,8 +439,10 @@
             <div class="col-12">
                 <div class="card">
                     <div class="card-header bg-white">
-                        <h6 class="mb-0 fw-bold text-dark"><i class="bi bi-clock-history me-2"></i>Histórico de
-                            Atendimentos</h6>
+                        <h6 class="mb-0 fw-bold text-dark">
+                            <i class="bi bi-clock-history me-2"></i>
+                            Histórico de Atendimentos
+                        </h6>
                     </div>
                     <div class="card-body p-0">
                         <div class="table-responsive" style="max-height: 400px;">
@@ -276,20 +467,23 @@
             </div>
 
         </div>
-
     </main>
 
     <!-- FOOTER -->
     <footer class="py-4 mt-5 bg-white border-top">
         <div class="container text-center">
-            <p class="text-muted small mb-0">© 2025 La Belle Divas - CRM Financeiro v1.1</p>
+            <p class="text-muted small mb-0">
+                © 2025 La Belle Divas - CRM Financeiro v1.2
+            </p>
         </div>
     </footer>
 
     <!-- Bootstrap JS Bundle -->
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-    <!-- Main Script -->
+    <script
+        src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"
+    ></script>
+
+    <!-- Script principal -->
     <script src="script.js"></script>
 </body>
-
 </html>
