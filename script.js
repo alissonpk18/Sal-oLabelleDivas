@@ -309,23 +309,47 @@ async function carregarDadosIniciais() {
   console.log('[INFO] Carregando dados iniciais...');
 
   try {
-    const [
-      dadosClientes,
-      dadosServicos,
-      dadosAtend,
-      dadosDespesas
-    ] = await Promise.all([
+    // Dispara todas as chamadas em paralelo, mas não quebra se uma falhar
+    const resultados = await Promise.allSettled([
       apiGet('listClientes'),
       apiGet('listServicos'),
       apiGet('listAtendimentos'),
       apiGet('listDespesas')
     ]);
 
-    cacheClientes     = dadosClientes.clientes  || [];
-    cacheServicos     = dadosServicos.servicos  || [];
-    cacheAtendimentos = dadosAtend.atendimentos || [];
-    cacheDespesas     = dadosDespesas.despesas  || [];
+    const [rClientes, rServicos, rAtend, rDespesas] = resultados;
 
+    // Helper para extrair array ou logar erro/aviso
+    function extrairDados(result, chavePayload, nomeRecurso) {
+      if (result.status === 'fulfilled') {
+        const payload = result.value || {};
+        const dados = payload[chavePayload];
+
+        if (Array.isArray(dados)) {
+          return dados;
+        } else {
+          console.warn(
+            `[WARN] ${nomeRecurso}: payload sem array '${chavePayload}'.`,
+            payload
+          );
+          return [];
+        }
+      } else {
+        console.error(
+          `[ERRO] Falha ao carregar ${nomeRecurso}:`,
+          result.reason
+        );
+        return [];
+      }
+    }
+
+    // Atualiza caches com o que deu certo (ou [] se falhou)
+    cacheClientes     = extrairDados(rClientes,  'clientes',     'clientes');
+    cacheServicos     = extrairDados(rServicos,  'servicos',     'serviços');
+    cacheAtendimentos = extrairDados(rAtend,     'atendimentos', 'atendimentos');
+    cacheDespesas     = extrairDados(rDespesas,  'despesas',     'despesas');
+
+    // Atualiza selects e tabelas
     preencherSelectClientes();
     preencherSelectServicos();
 
@@ -334,10 +358,11 @@ async function carregarDadosIniciais() {
     renderTabelaAtendimentos();
     renderTabelaDespesas();
 
-    console.log('[INFO] Dados iniciais carregados.');
+    console.log('[INFO] Dados iniciais carregados (veja avisos acima, se houver).');
   } catch (err) {
-    console.error('[ERRO] carregarDadosIniciais:', err);
-    throw err; // deixa o configurador de login mostrar o alerta
+    // Só entra aqui se houver um erro inesperado (ex.: bug em renderTabelaX)
+    console.error('[ERRO] carregarDadosIniciais (erro inesperado):', err);
+    throw err; // mantém o alerta do fluxo de login
   }
 }
 
@@ -629,4 +654,5 @@ document.addEventListener('DOMContentLoaded', () => {
   console.log('[INFO] DOM carregado, iniciando configuração de login...');
   configurarLogin();
 });
+
 
