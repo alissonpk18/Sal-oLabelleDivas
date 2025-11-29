@@ -12,7 +12,7 @@
 // =============================
 
 // ATENÇÃO: coloque aqui a URL do seu WebApp publicado do Apps Script
-const API_URL = 'SUA_URL_DO_APPS_SCRIPT_AQUI'; // ex: 'https://script.google.com/macros/s/AKfycbx.../exec'
+const 'API_URL = https://script.google.com/macros/s/AKfycbyycqZj4CsjV3RHtBtPdiiaLOYUS8EiwZUKc47RZPkdLnTN74_Zgkhq9udTo1n6j_pvdA/exec'; // ex: 'https://script.google.com/macros/s/AKfycbx.../exec'
 
 // =============================
 // CONTROLE DE LOGIN SIMPLES
@@ -496,3 +496,4 @@ async function atualizarResumoFinanceiro() {
 document.addEventListener('DOMContentLoaded', () => {
   configurarLogin();
 });
+
