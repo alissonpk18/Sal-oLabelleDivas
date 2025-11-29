@@ -357,15 +357,15 @@ async function onSubmitAtendimento(event) {
 async function enviarDados(payload, msgSucesso, callbackSucesso) {
     const options = {
         method: 'POST',
+        // IMPORTANTE: usar text/plain para ser um "simple request" e não ter preflight OPTIONS
         headers: {
-            'Content-Type': 'application/json'
+            'Content-Type': 'text/plain;charset=utf-8'
         },
         body: JSON.stringify(payload)
     };
 
     try {
         const data = await fetchJSON(URL_API, options);
-
         if (data && data.sucesso) {
             alert(msgSucesso);
             if (callbackSucesso) callbackSucesso();
@@ -380,6 +380,7 @@ async function enviarDados(payload, msgSucesso, callbackSucesso) {
         alert('Erro na comunicação. Verifique se a API permite acesso.');
     }
 }
+
 
 // 5. UTILITÁRIOS
 
@@ -405,3 +406,4 @@ function escapeHTML(texto) {
         .replace(/"/g, "&quot;")
         .replace(/'/g, "&#039;");
 }
+
