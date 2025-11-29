@@ -1,10 +1,10 @@
 <!--
 Fluxograma resumido (HTML CRM):
 Entrada → usuário acessa a página no GitHub Pages
-Validação → navegação pelas seções (cadastro cliente, serviço, atendimento, resumo, tabelas)
-Lógica → Bootstrap organiza o layout; JavaScript (script.js) faz integrações com a API e preenche os dados
+Validação → navegação pelas seções (cadastros, atendimento, resumo, listas)
+Lógica → Bootstrap organiza o layout; JavaScript (script.js) integra com a API
 Saída → interface para registrar e visualizar clientes, serviços, atendimentos e resumo financeiro
-Versão 1.2 — 29/11/2025 / Mudança: HTML reorganizado e comentado para o CRM Financeiro La Belle Divas
+Versão 1.3 — 29/11/2025 / Mudança: Registrar Atendimento como tela principal; cadastros e listas em botões (collapse)
 -->
 
 <!DOCTYPE html>
@@ -48,159 +48,10 @@ Versão 1.2 — 29/11/2025 / Mudança: HTML reorganizado e comentado para o CRM 
     <!-- MAIN CONTENT -->
     <main class="container my-3">
 
-        <!-- LINHA DE FORMULÁRIOS -->
-        <div class="row g-4 mb-5">
-
-            <!-- SEÇÃO 1: Cadastro de Cliente -->
-            <div class="col-lg-4 col-md-6">
-                <div class="card h-100">
-                    <div class="card-header">
-                        <h5 class="card-title text-primary-custom mb-0">
-                            <i class="bi bi-person-plus fs-4"></i>
-                            Novo Cliente
-                        </h5>
-                    </div>
-                    <div class="card-body">
-                        <form id="formCliente">
-                            <div class="mb-3">
-                                <label
-                                    for="clienteNome"
-                                    class="form-label small text-muted text-uppercase fw-bold"
-                                >
-                                    Nome Completo *
-                                </label>
-                                <input
-                                    type="text"
-                                    class="form-control"
-                                    id="clienteNome"
-                                    required
-                                    placeholder="Ex: Maria Silva"
-                                >
-                            </div>
-
-                            <div class="mb-3">
-                                <label
-                                    for="clienteTelefone"
-                                    class="form-label small text-muted text-uppercase fw-bold"
-                                >
-                                    Telefone
-                                </label>
-                                <input
-                                    type="text"
-                                    class="form-control"
-                                    id="clienteTelefone"
-                                    placeholder="(XX) XXXXX-XXXX"
-                                >
-                            </div>
-
-                            <div class="mb-3">
-                                <label
-                                    for="clienteObs"
-                                    class="form-label small text-muted text-uppercase fw-bold"
-                                >
-                                    Observações
-                                </label>
-                                <textarea
-                                    class="form-control"
-                                    id="clienteObs"
-                                    rows="2"
-                                    placeholder="Preferências, alergias..."
-                                ></textarea>
-                            </div>
-
-                            <button type="submit" class="btn btn-primary-custom w-100">
-                                <i class="bi bi-save me-1"></i>
-                                Salvar Cliente
-                            </button>
-                        </form>
-                    </div>
-                </div>
-            </div>
-
-            <!-- SEÇÃO 2: Cadastro de Serviço -->
-            <div class="col-lg-4 col-md-6">
-                <div class="card h-100">
-                    <div class="card-header">
-                        <h5 class="card-title text-pink-custom mb-0">
-                            <i class="bi bi-scissors fs-4"></i>
-                            Novo Serviço
-                        </h5>
-                    </div>
-                    <div class="card-body">
-                        <form id="formServico">
-                            <div class="mb-3">
-                                <label
-                                    for="servicoNome"
-                                    class="form-label small text-muted text-uppercase fw-bold"
-                                >
-                                    Nome do Serviço *
-                                </label>
-                                <input
-                                    type="text"
-                                    class="form-control"
-                                    id="servicoNome"
-                                    required
-                                    placeholder="Ex: Corte Bordado"
-                                >
-                            </div>
-
-                            <div class="mb-3">
-                                <label
-                                    for="servicoCategoria"
-                                    class="form-label small text-muted text-uppercase fw-bold"
-                                >
-                                    Categoria
-                                </label>
-                                <input
-                                    type="text"
-                                    class="form-control"
-                                    id="servicoCategoria"
-                                    placeholder="Ex: Cabelo"
-                                >
-                            </div>
-
-                            <div class="mb-3">
-                                <label
-                                    for="servicoPreco"
-                                    class="form-label small text-muted text-uppercase fw-bold"
-                                >
-                                    Preço Base (R$) *
-                                </label>
-                                <input
-                                    type="number"
-                                    class="form-control"
-                                    id="servicoPreco"
-                                    step="0.01"
-                                    min="0"
-                                    required
-                                    placeholder="0.00"
-                                >
-                            </div>
-
-                            <div class="mb-3 form-check">
-                                <input
-                                    type="checkbox"
-                                    class="form-check-input"
-                                    id="servicoAtivo"
-                                    checked
-                                >
-                                <label class="form-check-label" for="servicoAtivo">
-                                    Disponível para agendamento
-                                </label>
-                            </div>
-
-                            <button type="submit" class="btn btn-pink-custom w-100">
-                                <i class="bi bi-save me-1"></i>
-                                Salvar Serviço
-                            </button>
-                        </form>
-                    </div>
-                </div>
-            </div>
-
-            <!-- SEÇÃO 3: Registro de Atendimento -->
-            <div class="col-lg-4 col-md-12">
-                <!-- Destaque sutil: borda e header colorido -->
+        <!-- LINHA PRINCIPAL: Registrar Atendimento (principal) + Resumo -->
+        <div class="row g-4 mb-4">
+            <!-- Registrar Atendimento - SEMPRE VISÍVEL -->
+            <div class="col-lg-7 col-md-12">
                 <div class="card h-100 border-2 border-primary-subtle">
                     <div class="card-header bg-primary-subtle">
                         <h5 class="card-title text-dark mb-0">
@@ -237,7 +88,7 @@ Versão 1.2 — 29/11/2025 / Mudança: HTML reorganizado e comentado para o CRM 
                                     id="atCliente"
                                     required
                                 >
-                                    <option value="">Selecione...</option>
+                                    <option value="">Selecione um cliente...</option>
                                 </select>
                             </div>
 
@@ -253,7 +104,7 @@ Versão 1.2 — 29/11/2025 / Mudança: HTML reorganizado e comentado para o CRM 
                                     id="atServico"
                                     required
                                 >
-                                    <option value="">Selecione...</option>
+                                    <option value="">Selecione um serviço...</option>
                                 </select>
                             </div>
 
@@ -316,164 +167,369 @@ Versão 1.2 — 29/11/2025 / Mudança: HTML reorganizado e comentado para o CRM 
                     </div>
                 </div>
             </div>
+
+            <!-- Resumo Financeiro ao lado -->
+            <div class="col-lg-5 col-md-12">
+                <div class="card mb-0 h-100">
+                    <div class="card-header d-flex justify-content-between align-items-center bg-white">
+                        <h5 class="mb-0 text-dark">
+                            <i class="bi bi-graph-up-arrow me-2 text-primary"></i>
+                            Resumo Financeiro
+                        </h5>
+                        <input
+                            type="month"
+                            id="mesResumo"
+                            class="form-control form-control-sm w-auto border-primary-subtle text-primary fw-bold"
+                        >
+                    </div>
+                    <div class="card-body">
+                        <div class="row text-center g-3">
+                            <div class="col-md-12">
+                                <div class="p-3 rounded bg-success-subtle h-100">
+                                    <span class="d-block text-success small text-uppercase fw-bold mb-1">
+                                        Entradas
+                                    </span>
+                                    <strong id="resumoEntradas" class="fs-3 text-success">
+                                        R$ 0,00
+                                    </strong>
+                                </div>
+                            </div>
+
+                            <div class="col-md-6">
+                                <div class="p-3 rounded bg-danger-subtle h-100">
+                                    <span class="d-block text-danger small text-uppercase fw-bold mb-1">
+                                        Saídas
+                                    </span>
+                                    <strong id="resumoSaidas" class="fs-3 text-danger">
+                                        R$ 0,00
+                                    </strong>
+                                </div>
+                            </div>
+
+                            <div class="col-md-6">
+                                <div class="p-3 rounded bg-primary-subtle h-100">
+                                    <span class="d-block text-primary small text-uppercase fw-bold mb-1">
+                                        Resultado Líquido
+                                    </span>
+                                    <strong id="resumoResultado" class="fs-3 text-primary">
+                                        R$ 0,00
+                                    </strong>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
 
-        <!-- SEÇÃO 4: Resumo Mensal -->
-        <div class="card mb-5">
-            <div class="card-header d-flex justify-content-between align-items-center bg-white">
-                <h5 class="mb-0 text-dark">
-                    <i class="bi bi-graph-up-arrow me-2 text-primary"></i>
-                    Resumo Financeiro
-                </h5>
-                <input
-                    type="month"
-                    id="mesResumo"
-                    class="form-control form-control-sm w-auto border-primary-subtle text-primary fw-bold"
+        <!-- BOTÕES: CADASTROS (Novo Cliente / Novo Serviço) -->
+        <section class="mb-3">
+            <div class="d-flex flex-wrap gap-2">
+                <button
+                    class="btn btn-outline-primary"
+                    type="button"
+                    data-bs-toggle="collapse"
+                    data-bs-target="#secNovoCliente"
+                    aria-expanded="false"
+                    aria-controls="secNovoCliente"
                 >
+                    <i class="bi bi-person-plus me-1"></i>
+                    Novo Cliente
+                </button>
+
+                <button
+                    class="btn btn-outline-danger"
+                    type="button"
+                    data-bs-toggle="collapse"
+                    data-bs-target="#secNovoServico"
+                    aria-expanded="false"
+                    aria-controls="secNovoServico"
+                >
+                    <i class="bi bi-scissors me-1"></i>
+                    Novo Serviço
+                </button>
             </div>
-            <div class="card-body">
-                <div class="row text-center g-3">
-                    <div class="col-md-4">
-                        <div class="p-3 rounded bg-success-subtle h-100">
-                            <span class="d-block text-success small text-uppercase fw-bold mb-1">
-                                Entradas
-                            </span>
-                            <strong id="resumoEntradas" class="fs-3 text-success">
-                                R$ 0,00
-                            </strong>
-                        </div>
-                    </div>
+        </section>
 
-                    <div class="col-md-4">
-                        <div class="p-3 rounded bg-danger-subtle h-100">
-                            <span class="d-block text-danger small text-uppercase fw-bold mb-1">
-                                Saídas
-                            </span>
-                            <strong id="resumoSaidas" class="fs-3 text-danger">
-                                R$ 0,00
-                            </strong>
+        <!-- FORMULÁRIO NOVO CLIENTE (collapse) -->
+        <div id="secNovoCliente" class="collapse mb-4">
+            <div class="card h-100">
+                <div class="card-header">
+                    <h5 class="card-title text-primary-custom mb-0">
+                        <i class="bi bi-person-plus fs-4"></i>
+                        Novo Cliente
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <form id="formCliente">
+                        <div class="mb-3">
+                            <label
+                                for="clienteNome"
+                                class="form-label small text-muted text-uppercase fw-bold"
+                            >
+                                Nome Completo *
+                            </label>
+                            <input
+                                type="text"
+                                class="form-control"
+                                id="clienteNome"
+                                required
+                                placeholder="Ex: Maria Silva"
+                            >
                         </div>
-                    </div>
 
-                    <div class="col-md-4">
-                        <div class="p-3 rounded bg-primary-subtle h-100">
-                            <span class="d-block text-primary small text-uppercase fw-bold mb-1">
-                                Resultado Líquido
-                            </span>
-                            <strong id="resumoResultado" class="fs-3 text-primary">
-                                R$ 0,00
-                            </strong>
+                        <div class="mb-3">
+                            <label
+                                for="clienteTelefone"
+                                class="form-label small text-muted text-uppercase fw-bold"
+                            >
+                                Telefone
+                            </label>
+                            <input
+                                type="text"
+                                class="form-control"
+                                id="clienteTelefone"
+                                placeholder="(XX) XXXXX-XXXX"
+                            >
                         </div>
+
+                        <div class="mb-3">
+                            <label
+                                for="clienteObs"
+                                class="form-label small text-muted text-uppercase fw-bold"
+                            >
+                                Observações
+                            </label>
+                            <textarea
+                                class="form-control"
+                                id="clienteObs"
+                                rows="2"
+                                placeholder="Preferências, alergias..."
+                            ></textarea>
+                        </div>
+
+                        <button type="submit" class="btn btn-primary-custom w-100">
+                            <i class="bi bi-save me-1"></i>
+                            Salvar Cliente
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- FORMULÁRIO NOVO SERVIÇO (collapse) -->
+        <div id="secNovoServico" class="collapse mb-4">
+            <div class="card h-100">
+                <div class="card-header">
+                    <h5 class="card-title text-pink-custom mb-0">
+                        <i class="bi bi-scissors fs-4"></i>
+                        Novo Serviço
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <form id="formServico">
+                        <div class="mb-3">
+                            <label
+                                for="servicoNome"
+                                class="form-label small text-muted text-uppercase fw-bold"
+                            >
+                                Nome do Serviço *
+                            </label>
+                            <input
+                                type="text"
+                                class="form-control"
+                                id="servicoNome"
+                                required
+                                placeholder="Ex: Corte Bordado"
+                            >
+                        </div>
+
+                        <div class="mb-3">
+                            <label
+                                for="servicoCategoria"
+                                class="form-label small text-muted text-uppercase fw-bold"
+                            >
+                                Categoria
+                            </label>
+                            <input
+                                type="text"
+                                class="form-control"
+                                id="servicoCategoria"
+                                placeholder="Ex: Cabelo"
+                            >
+                        </div>
+
+                        <div class="mb-3">
+                            <label
+                                for="servicoPreco"
+                                class="form-label small text-muted text-uppercase fw-bold"
+                            >
+                                Preço Base (R$) *
+                            </label>
+                            <input
+                                type="number"
+                                class="form-control"
+                                id="servicoPreco"
+                                step="0.01"
+                                min="0"
+                                required
+                                placeholder="0.00"
+                            >
+                        </div>
+
+                        <!-- Checkbox de "Disponível para agendamento" REMOVIDO -->
+
+                        <button type="submit" class="btn btn-pink-custom w-100">
+                            <i class="bi bi-save me-1"></i>
+                            Salvar Serviço
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- BOTÕES: LISTAS E HISTÓRICO -->
+        <section class="mb-3">
+            <div class="d-flex flex-wrap gap-2">
+                <button
+                    class="btn btn-outline-secondary"
+                    type="button"
+                    data-bs-toggle="collapse"
+                    data-bs-target="#secHistorico"
+                    aria-expanded="false"
+                    aria-controls="secHistorico"
+                >
+                    <i class="bi bi-clock-history me-1"></i>
+                    Histórico de Atendimentos
+                </button>
+
+                <button
+                    class="btn btn-outline-secondary"
+                    type="button"
+                    data-bs-toggle="collapse"
+                    data-bs-target="#secListaClientes"
+                    aria-expanded="false"
+                    aria-controls="secListaClientes"
+                >
+                    <i class="bi bi-people me-1"></i>
+                    Lista de Clientes
+                </button>
+
+                <button
+                    class="btn btn-outline-secondary"
+                    type="button"
+                    data-bs-toggle="collapse"
+                    data-bs-target="#secListaServicos"
+                    aria-expanded="false"
+                    aria-controls="secListaServicos"
+                >
+                    <i class="bi bi-list-stars me-1"></i>
+                    Lista de Serviços
+                </button>
+            </div>
+        </section>
+
+        <!-- LISTA DE CLIENTES (collapse) -->
+        <div id="secListaClientes" class="collapse mb-4">
+            <div class="card h-100">
+                <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                    <h6 class="mb-0 fw-bold text-primary-custom">
+                        <i class="bi bi-people me-2"></i>
+                        Clientes
+                    </h6>
+                    <span class="badge bg-light text-dark border">
+                        Lista Completa
+                    </span>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive" style="max-height: 300px;">
+                        <table class="table table-hover mb-0 align-middle">
+                            <thead class="sticky-top">
+                                <tr>
+                                    <th>Nome</th>
+                                    <th>Telefone</th>
+                                    <th>Obs</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tabelaClientes">
+                                <!-- Preenchido via JS -->
+                            </tbody>
+                        </table>
                     </div>
                 </div>
             </div>
         </div>
 
-        <!-- LINHA DE TABELAS -->
-        <div class="row g-4">
-
-            <!-- SEÇÃO 5: Tabela de Clientes -->
-            <div class="col-md-6">
-                <div class="card h-100">
-                    <div class="card-header bg-white d-flex justify-content-between align-items-center">
-                        <h6 class="mb-0 fw-bold text-primary-custom">
-                            <i class="bi bi-people me-2"></i>
-                            Clientes
-                        </h6>
-                        <span class="badge bg-light text-dark border">
-                            Lista Completa
-                        </span>
-                    </div>
-                    <div class="card-body p-0">
-                        <div class="table-responsive" style="max-height: 300px;">
-                            <table class="table table-hover mb-0 align-middle">
-                                <thead class="sticky-top">
-                                    <tr>
-                                        <th>Nome</th>
-                                        <th>Telefone</th>
-                                        <th>Obs</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="tabelaClientes">
-                                    <!-- Preenchido via JS -->
-                                </tbody>
-                            </table>
-                        </div>
+        <!-- LISTA DE SERVIÇOS (collapse) -->
+        <div id="secListaServicos" class="collapse mb-4">
+            <div class="card h-100">
+                <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                    <h6 class="mb-0 fw-bold text-pink-custom">
+                        <i class="bi bi-list-stars me-2"></i>
+                        Serviços
+                    </h6>
+                    <span class="badge bg-light text-dark border">
+                        Catálogo
+                    </span>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive" style="max-height: 300px;">
+                        <table class="table table-hover mb-0 align-middle">
+                            <thead class="sticky-top">
+                                <tr>
+                                    <th>Nome</th>
+                                    <th>Categoria</th>
+                                    <th>Preço</th>
+                                    <th>Ativo</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tabelaServicos">
+                                <!-- Preenchido via JS -->
+                            </tbody>
+                        </table>
                     </div>
                 </div>
             </div>
-
-            <!-- SEÇÃO 6: Tabela de Serviços -->
-            <div class="col-md-6">
-                <div class="card h-100">
-                    <div class="card-header bg-white d-flex justify-content-between align-items-center">
-                        <h6 class="mb-0 fw-bold text-pink-custom">
-                            <i class="bi bi-list-stars me-2"></i>
-                            Serviços
-                        </h6>
-                        <span class="badge bg-light text-dark border">
-                            Catálogo
-                        </span>
-                    </div>
-                    <div class="card-body p-0">
-                        <div class="table-responsive" style="max-height: 300px;">
-                            <table class="table table-hover mb-0 align-middle">
-                                <thead class="sticky-top">
-                                    <tr>
-                                        <th>Nome</th>
-                                        <th>Categoria</th>
-                                        <th>Preço</th>
-                                        <th>Ativo</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="tabelaServicos">
-                                    <!-- Preenchido via JS -->
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- SEÇÃO 7: Tabela de Atendimentos -->
-            <div class="col-12">
-                <div class="card">
-                    <div class="card-header bg-white">
-                        <h6 class="mb-0 fw-bold text-dark">
-                            <i class="bi bi-clock-history me-2"></i>
-                            Histórico de Atendimentos
-                        </h6>
-                    </div>
-                    <div class="card-body p-0">
-                        <div class="table-responsive" style="max-height: 400px;">
-                            <table class="table table-hover mb-0 align-middle">
-                                <thead class="sticky-top">
-                                    <tr>
-                                        <th>Data</th>
-                                        <th>Cliente</th>
-                                        <th>Serviço</th>
-                                        <th>Valor</th>
-                                        <th>Pagamento</th>
-                                        <th>Obs</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="tabelaAtendimentos">
-                                    <!-- Preenchido via JS -->
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
         </div>
+
+        <!-- HISTÓRICO DE ATENDIMENTOS (collapse) -->
+        <div id="secHistorico" class="collapse mb-4">
+            <div class="card">
+                <div class="card-header bg-white">
+                    <h6 class="mb-0 fw-bold text-dark">
+                        <i class="bi bi-clock-history me-2"></i>
+                        Histórico de Atendimentos
+                    </h6>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive" style="max-height: 400px;">
+                        <table class="table table-hover mb-0 align-middle">
+                            <thead class="sticky-top">
+                                <tr>
+                                    <th>Data</th>
+                                    <th>Cliente</th>
+                                    <th>Serviço</th>
+                                    <th>Valor</th>
+                                    <th>Pagamento</th>
+                                    <th>Obs</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tabelaAtendimentos">
+                                <!-- Preenchido via JS -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
     </main>
 
     <!-- FOOTER -->
     <footer class="py-4 mt-5 bg-white border-top">
         <div class="container text-center">
             <p class="text-muted small mb-0">
-                © 2025 La Belle Divas - CRM Financeiro v1.2
+                © 2025 La Belle Divas - CRM Financeiro v1.3
             </p>
         </div>
     </footer>
