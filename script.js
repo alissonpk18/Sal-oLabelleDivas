@@ -14,7 +14,9 @@
 // URL do WebApp publicado do Apps Script (App da Web)
 const API_URL = 'https://script.google.com/macros/s/AKfycbyycqZj4CsjV3RHtBtPdiiaLOYUS8EiwZUKc47RZPkdLnTN74_Zgkhq9udTo1n6j_pvdA/exec';
 
-
+// =============================
+// CONTROLE DE LOGIN SIMPLES
+// =============================
 
 const LOGIN_USERS = {
   dagmar: { role: 'admin' },
@@ -22,12 +24,6 @@ const LOGIN_USERS = {
 };
 
 const LOGIN_SENHA = '1234';
-
-let currentRole = null;
-await carregarDadosIniciais();
-inicializarEventosFormularios();
-inicializarResumoFinanceiro();
-
 
 // =============================
 // FUNÇÕES AUXILIARES
@@ -39,10 +35,12 @@ function formatarMoeda(valor) {
 }
 
 function formatarData(valor) {
-  if (!(valor instanceof Date)) return valor || '';
-  const dia = String(valor.getDate()).padStart(2, '0');
-  const mes = String(valor.getMonth() + 1).padStart(2, '0');
-  const ano = valor.getFullYear();
+  if (!valor) return '';
+  const d = new Date(valor);
+  if (isNaN(d.getTime())) return valor;
+  const dia = String(d.getDate()).padStart(2, '0');
+  const mes = String(d.getMonth() + 1).padStart(2, '0');
+  const ano = d.getFullYear();
   return `${dia}/${mes}/${ano}`;
 }
 
@@ -498,6 +496,7 @@ async function atualizarResumoFinanceiro() {
 document.addEventListener('DOMContentLoaded', () => {
   configurarLogin();
 });
+
 
 
 
