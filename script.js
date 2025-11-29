@@ -1,652 +1,498 @@
-// =======================================================
-// Fluxograma resumido (script.js CRM Financeiro + Login)
-// Entrada:
-//   - Login simples (usuário/senha em memória)
-//   - Requisições HTTP GET/POST para o Apps Script (API_URL)
-// Validação:
-//   - Login: usuário = dagmar|cadastro e senha = 1234
-//   - Forms: campos obrigatórios antes de enviar
-// Lógica:
-//   - Carregar combos/listas (clientes, serviços, atendimentos, despesas)
-//   - Registrar novos clientes, serviços, atendimentos e despesas
-//   - Calcular resumo mensal (entradas, saídas, resultado)
-// Saída:
-//   - Interface atualizada (tabelas, selects, resumo financeiro)
-//   - Alertas simples de sucesso/erro
-// Versão 1.5 — 29/11/2025 / Mudança: inclusão de login (dagmar/cadastro)
-//   e controle de visibilidade por perfil.
-// =======================================================
+/**
+ * Fluxograma resumido (script.js CRM):
+ * Entrada → usuário faz login (dagmar/cadastro) → ações na tela (cadastros, atendimentos, despesas, filtros)
+ * Validação → login simples (usuário/senha) + validação básica de formulários
+ * Lógica → chamadas à API (GET/POST) para CLIENTES, SERVICOS, ATENDIMENTOS, DESPESAS e RESUMO MENSAL
+ * Saída → atualização dos selects, tabelas e cards de resumo financeiro
+ * Versão 1.5 — 29/11/2025 / Mudança: login simples + integração com resumoMensal + carregamento inicial após login
+ */
 
-// =======================================================
-// CONFIGURAÇÃO DA API
-// =======================================================
+// =============================
+// CONFIGURAÇÃO BÁSICA DA API
+// =============================
 
-// SUBSTITUA AQUÍ PELO URL DO SEU WEBAPP DO APPS SCRIPT:
-const API_URL = 'https://script.google.com/macros/s/SEU_WEBAPP_AQUI/exec';
+// ATENÇÃO: coloque aqui a URL do seu WebApp publicado do Apps Script
+const API_URL = 'SUA_URL_DO_APPS_SCRIPT_AQUI'; // ex: 'https://script.google.com/macros/s/AKfycbx.../exec'
 
-// Cache em memória
+// =============================
+// CONTROLE DE LOGIN SIMPLES
+// =============================
+
+const LOGIN_USERS = {
+  dagmar: { role: 'admin' },
+  cadastro: { role: 'cadastro' }
+};
+
+const LOGIN_SENHA = '1234';
+
+let currentRole = null;
+
+// =============================
+// FUNÇÕES AUXILIARES
+// =============================
+
+function formatarMoeda(valor) {
+  const n = Number(valor) || 0;
+  return n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+}
+
+function formatarData(valor) {
+  if (!(valor instanceof Date)) return valor || '';
+  const dia = String(valor.getDate()).padStart(2, '0');
+  const mes = String(valor.getMonth() + 1).padStart(2, '0');
+  const ano = valor.getFullYear();
+  return `${dia}/${mes}/${ano}`;
+}
+
+async function apiGet(action, params = {}) {
+  const url = new URL(API_URL);
+  url.searchParams.set('action', action);
+  Object.entries(params).forEach(([k, v]) => {
+    if (v !== undefined && v !== null) {
+      url.searchParams.set(k, v);
+    }
+  });
+
+  const resp = await fetch(url.toString());
+  if (!resp.ok) {
+    throw new Error(`HTTP ${resp.status} - ${resp.statusText}`);
+  }
+
+  const data = await resp.json();
+  if (!data.sucesso) {
+    throw new Error(data.mensagem || 'Erro retornado pela API.');
+  }
+  return data;
+}
+
+async function apiPost(tipoRegistro, payload) {
+  const resp = await fetch(API_URL, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      tipoRegistro,
+      ...payload
+    })
+  });
+
+  if (!resp.ok) {
+    throw new Error(`HTTP ${resp.status} - ${resp.statusText}`);
+  }
+
+  const data = await resp.json();
+  if (!data.sucesso) {
+    throw new Error(data.mensagem || 'Erro retornado pela API.');
+  }
+  return data;
+}
+
+// =============================
+// CACHE EM MEMÓRIA
+// =============================
+
 let cacheClientes = [];
 let cacheServicos = [];
 let cacheAtendimentos = [];
 let cacheDespesas = [];
-let mapaClientes = {}; // ID -> Nome
-let mapaServicos = {}; // ID -> Nome
-let papelAtual = null; // 'admin' ou 'cadastro'
 
-// =======================================================
-// INICIALIZAÇÃO GERAL
-// =======================================================
+// =============================
+// LOGIN E CONTROLE DE INTERFACE
+// =============================
 
-document.addEventListener('DOMContentLoaded', () => {
-  inicializarLogin();
-});
+function aplicarRoleNaInterface() {
+  // Por enquanto:
+  //  - admin: vê tudo
+  //  - cadastro: vê apenas o formulário de atendimento
+  const isCadastro = currentRole === 'cadastro';
 
-// =======================================================
-// LOGIN SIMPLES (HTML precisa ter:
-//   - div #loginWrapper
-//   - form #loginForm
-//   - input #loginUsuario
-//   - input #loginSenha
-//   - div #appMain (conteúdo principal, começa com d-none)
-// =======================================================
+  const elementosRestritos = [
+    document.querySelector('section.mb-3'), // botões Novo Cliente / Novo Serviço / Despesa
+    document.getElementById('secNovoCliente'),
+    document.getElementById('secNovoServico'),
+    document.getElementById('secNovaDespesa'),
+    document.getElementById('secListaClientes'),
+    document.getElementById('secListaServicos'),
+    document.getElementById('secListaDespesas'),
+    document.getElementById('secHistorico')
+  ];
 
-function inicializarLogin() {
+  elementosRestritos.forEach(el => {
+    if (!el) return;
+    if (isCadastro) {
+      el.classList.add('d-none');
+    } else {
+      el.classList.remove('d-none');
+    }
+  });
+}
+
+function configurarLogin() {
+  const loginForm   = document.getElementById('loginForm');
+  const loginUser   = document.getElementById('loginUsuario');
+  const loginSenha  = document.getElementById('loginSenha');
+  const loginErro   = document.getElementById('loginErro');
   const loginWrapper = document.getElementById('loginWrapper');
-  const appMain = document.getElementById('appMain');
-  const loginForm = document.getElementById('loginForm');
-  const inputUsuario = document.getElementById('loginUsuario');
-  const inputSenha = document.getElementById('loginSenha');
+  const appMain      = document.getElementById('appMain');
 
-  if (!loginForm || !loginWrapper || !appMain) {
-    console.warn('Elementos de login não encontrados. Iniciando app direto.');
-    inicializarApp(); // fallback
+  if (!loginForm || !loginUser || !loginSenha || !loginWrapper || !appMain) {
+    console.error('[ERRO] Elementos de login não encontrados no HTML.');
     return;
   }
 
-  loginForm.addEventListener('submit', (e) => {
-    e.preventDefault();
+  loginForm.addEventListener('submit', async (ev) => {
+    ev.preventDefault();
 
-    const usuario = (inputUsuario.value || '').trim().toLowerCase();
-    const senha = (inputSenha.value || '').trim();
+    const usuario = (loginUser.value || '').trim().toLowerCase();
+    const senha   = (loginSenha.value || '').trim();
 
-    if (!usuario || !senha) {
-      alert('Informe usuário e senha.');
+    const userCfg = LOGIN_USERS[usuario];
+
+    if (!userCfg || senha !== LOGIN_SENHA) {
+      loginErro.classList.remove('d-none');
       return;
     }
 
-    if (senha !== '1234') {
-      alert('Senha incorreta.');
-      inputSenha.focus();
-      return;
-    }
+    loginErro.classList.add('d-none');
+    currentRole = userCfg.role;
 
-    if (usuario === 'dagmar') {
-      papelAtual = 'admin';
-    } else if (usuario === 'cadastro') {
-      papelAtual = 'cadastro';
-    } else {
-      alert('Usuário inválido. Use "dagmar" ou "cadastro".');
-      inputUsuario.focus();
-      return;
-    }
-
-    // Esconde login e mostra app
+    // Esconde tela de login, mostra app
     loginWrapper.classList.add('d-none');
     appMain.classList.remove('d-none');
 
-    aplicarPermissoesPorPapel(papelAtual);
-    inicializarApp();
-  });
-}
+    aplicarRoleNaInterface();
 
-/**
- * Esconde/mostra seções e botões de acordo com o papel
- * - admin: vê tudo
- * - cadastro: vê apenas Registrar Atendimento + Resumo
- */
-function aplicarPermissoesPorPapel(papel) {
-  if (papel !== 'cadastro') {
-    // admin vê tudo -> nada a esconder
-    return;
-  }
-
-  // Seções que só o admin deve ver
-  const alvosAdminTargets = [
-    '#secNovoCliente',
-    '#secNovoServico',
-    '#secNovaDespesa',
-    '#secListaClientes',
-    '#secListaServicos',
-    '#secListaDespesas',
-    '#secHistorico'
-  ];
-
-  // Esconde botões que abrem esses collapses
-  alvosAdminTargets.forEach((target) => {
-    document
-      .querySelectorAll(`[data-bs-target="${target}"]`)
-      .forEach((btn) => btn.classList.add('d-none'));
-
-    const sec = document.querySelector(target);
-    if (sec) {
-      sec.classList.add('d-none');
+    // Carrega dados iniciais e configura eventos
+    try {
+      await carregarDadosIniciais();
+      inicializarEventosFormularios();
+      inicializarResumoFinanceiro();
+    } catch (err) {
+      console.error('[ERRO] ao carregar dados iniciais após login:', err);
+      alert('Erro ao carregar dados iniciais. Verifique o console.');
     }
   });
 }
 
-// =======================================================
-// INICIALIZAÇÃO DO APP (DEPOIS DO LOGIN)
-// =======================================================
+// =============================
+// CARREGAMENTO INICIAL
+// =============================
 
-function inicializarApp() {
-  // Define mês atual no resumo
-  const mesResumo = document.getElementById('mesResumo');
-  if (mesResumo) {
-    const hoje = new Date();
-    const ano = hoje.getFullYear();
-    const mes = String(hoje.getMonth() + 1).padStart(2, '0');
-    mesResumo.value = `${ano}-${mes}`;
-    mesResumo.addEventListener('change', atualizarResumoFinanceiro);
-  }
+async function carregarDadosIniciais() {
+  console.log('[INFO] Carregando dados iniciais...');
+  const [
+    dadosClientes,
+    dadosServicos,
+    dadosAtend,
+    dadosDespesas
+  ] = await Promise.all([
+    apiGet('listClientes'),
+    apiGet('listServicos'),
+    apiGet('listAtendimentos'),
+    apiGet('listDespesas')
+  ]);
 
-  // Listeners dos formulários
-  const formCliente = document.getElementById('formCliente');
-  if (formCliente) {
-    formCliente.addEventListener('submit', handleSubmitCliente);
-  }
+  cacheClientes     = dadosClientes.clientes     || [];
+  cacheServicos     = dadosServicos.servicos     || [];
+  cacheAtendimentos = dadosAtend.atendimentos    || [];
+  cacheDespesas     = dadosDespesas.despesas     || [];
 
-  const formServico = document.getElementById('formServico');
-  if (formServico) {
-    formServico.addEventListener('submit', handleSubmitServico);
-  }
+  preencherSelectClientes();
+  preencherSelectServicos();
 
-  const formAtendimento = document.getElementById('formAtendimento');
-  if (formAtendimento) {
-    formAtendimento.addEventListener('submit', handleSubmitAtendimento);
-  }
+  renderTabelaClientes();
+  renderTabelaServicos();
+  renderTabelaAtendimentos();
+  renderTabelaDespesas();
 
-  const formDespesa = document.getElementById('formDespesa');
-  if (formDespesa) {
-    formDespesa.addEventListener('submit', handleSubmitDespesa);
-  }
-
-  // Carregamento inicial de dados
-  carregarTodosOsDados();
+  console.log('[INFO] Dados iniciais carregados.');
 }
 
-async function carregarTodosOsDados() {
-  try {
-    await Promise.all([
-      carregarClientes(),
-      carregarServicos(),
-      carregarAtendimentos(),
-      carregarDespesas(),
-      atualizarResumoFinanceiro()
-    ]);
-  } catch (err) {
-    console.error('Erro ao carregar dados iniciais:', err);
-    alert('Erro ao carregar dados iniciais. Verifique o console.');
-  }
-}
+// =============================
+// PREENCHIMENTO DE SELECTS
+// =============================
 
-// =======================================================
-// FUNÇÕES AUXILIARES DE API
-// =======================================================
+function preencherSelectClientes() {
+  const sel = document.getElementById('atCliente');
+  if (!sel) return;
 
-async function apiGet(paramsObj) {
-  const url = `${API_URL}?${new URLSearchParams(paramsObj).toString()}`;
-  const resp = await fetch(url);
-  if (!resp.ok) {
-    throw new Error(`HTTP ${resp.status}`);
-  }
-  const data = await resp.json();
-  if (data && data.sucesso === false) {
-    throw new Error(data.mensagem || 'Erro na API (GET).');
-  }
-  return data;
-}
+  sel.innerHTML = '<option value="">Selecione um cliente...</option>';
 
-async function apiPost(bodyObj) {
-  const resp = await fetch(API_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json;charset=utf-8' },
-    body: JSON.stringify(bodyObj)
-  });
-  if (!resp.ok) {
-    throw new Error(`HTTP ${resp.status}`);
-  }
-  const data = await resp.json();
-  if (data && data.sucesso === false) {
-    throw new Error(data.mensagem || 'Erro na API (POST).');
-  }
-  return data;
-}
-
-function formatarDataBR(valor) {
-  if (!valor) return '';
-  const d = valor instanceof Date ? valor : new Date(valor);
-  if (isNaN(d.getTime())) return '';
-  return d.toLocaleDateString('pt-BR');
-}
-
-function formatarMoedaBR(valor) {
-  const num = Number(valor) || 0;
-  return num.toLocaleString('pt-BR', {
-    style: 'currency',
-    currency: 'BRL'
+  cacheClientes.forEach(cli => {
+    const opt = document.createElement('option');
+    opt.value = cli.ID_CLIENTE || cli.ID || '';
+    opt.textContent = cli.NOME || '';
+    sel.appendChild(opt);
   });
 }
 
-// =======================================================
-// CARREGAR CLIENTES / SERVIÇOS / ATENDIMENTOS / DESPESAS
-// =======================================================
+function preencherSelectServicos() {
+  const sel = document.getElementById('atServico');
+  if (!sel) return;
 
-async function carregarClientes() {
-  const data = await apiGet({ action: 'listClientes' });
-  cacheClientes = data.clientes || [];
-  mapaClientes = {};
+  sel.innerHTML = '<option value="">Selecione um serviço...</option>';
 
-  const selectCliente = document.getElementById('atCliente');
+  cacheServicos.forEach(s => {
+    const opt = document.createElement('option');
+    opt.value = s.ID_SERVICO || s.ID || '';
+    const nome = s.NOME_SERVICO || s.NOME || '';
+    const preco = s.PRECO_BASE != null ? ` - ${formatarMoeda(s.PRECO_BASE)}` : '';
+    opt.textContent = nome + preco;
+    sel.appendChild(opt);
+  });
+}
+
+// =============================
+// RENDERIZAÇÃO DE TABELAS
+// =============================
+
+function renderTabelaClientes() {
   const tbody = document.getElementById('tabelaClientes');
+  if (!tbody) return;
+  tbody.innerHTML = '';
 
-  if (selectCliente) {
-    selectCliente.innerHTML = '<option value="">Selecione um cliente...</option>';
-  }
-  if (tbody) {
-    tbody.innerHTML = '';
-  }
-
-  cacheClientes.forEach((cli) => {
-    const id = cli.ID_CLIENTE;
-    const nome = cli.NOME;
-    mapaClientes[id] = nome;
-
-    if (selectCliente) {
-      const opt = document.createElement('option');
-      opt.value = id;
-      opt.textContent = nome;
-      selectCliente.appendChild(opt);
-    }
-
-    if (tbody) {
-      const tr = document.createElement('tr');
-      tr.innerHTML = `
-        <td>${nome || ''}</td>
-        <td>${cli.TELEFONE || ''}</td>
-        <td>${cli.OBSERVACOES || ''}</td>
-      `;
-      tbody.appendChild(tr);
-    }
+  cacheClientes.forEach(cli => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${cli.NOME || ''}</td>
+      <td>${cli.TELEFONE || ''}</td>
+      <td>${cli.OBSERVACOES || ''}</td>
+    `;
+    tbody.appendChild(tr);
   });
 }
 
-async function carregarServicos() {
-  const data = await apiGet({ action: 'listServicos' });
-  cacheServicos = data.servicos || [];
-  mapaServicos = {};
-
-  const selectServico = document.getElementById('atServico');
+function renderTabelaServicos() {
   const tbody = document.getElementById('tabelaServicos');
+  if (!tbody) return;
+  tbody.innerHTML = '';
 
-  if (selectServico) {
-    selectServico.innerHTML = '<option value="">Selecione um serviço...</option>';
-  }
-  if (tbody) {
-    tbody.innerHTML = '';
-  }
-
-  cacheServicos.forEach((srv) => {
-    const id = srv.ID_SERVICO;
-    const nome = srv.NOME_SERVICO;
-    mapaServicos[id] = nome;
-
-    if (selectServico) {
-      const opt = document.createElement('option');
-      opt.value = id;
-      opt.textContent = nome;
-      selectServico.appendChild(opt);
-    }
-
-    if (tbody) {
-      const tr = document.createElement('tr');
-      tr.innerHTML = `
-        <td>${nome || ''}</td>
-        <td>${srv.CATEGORIA || ''}</td>
-        <td>${formatarMoedaBR(srv.PRECO_BASE)}</td>
-        <td>${srv.ATIVO ? 'Sim' : 'Não'}</td>
-      `;
-      tbody.appendChild(tr);
-    }
+  cacheServicos.forEach(s => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${s.NOME_SERVICO || s.NOME || ''}</td>
+      <td>${s.CATEGORIA || ''}</td>
+      <td>${formatarMoeda(s.PRECO_BASE)}</td>
+      <td>${s.ATIVO}</td>
+    `;
+    tbody.appendChild(tr);
   });
 }
 
-async function carregarAtendimentos() {
-  const data = await apiGet({ action: 'listAtendimentos' });
-  cacheAtendimentos = data.atendimentos || [];
-
+function renderTabelaAtendimentos() {
   const tbody = document.getElementById('tabelaAtendimentos');
   if (!tbody) return;
   tbody.innerHTML = '';
 
-  cacheAtendimentos.forEach((at) => {
-    const nomeCli = mapaClientes[at.ID_CLIENTE] || at.ID_CLIENTE;
-    const nomeSrv = mapaServicos[at.ID_SERVICO] || at.ID_SERVICO;
-
+  cacheAtendimentos.forEach(a => {
     const tr = document.createElement('tr');
     tr.innerHTML = `
-      <td>${formatarDataBR(at.DATA)}</td>
-      <td>${nomeCli}</td>
-      <td>${nomeSrv}</td>
-      <td>${formatarMoedaBR(at.VALOR_TOTAL)}</td>
-      <td>${at.FORMA_PAGAMENTO || ''}</td>
-      <td>${at.OBSERVACOES || ''}</td>
+      <td>${formatarData(a.DATA)}</td>
+      <td>${a.ID_CLIENTE || ''}</td>
+      <td>${a.ID_SERVICO || ''}</td>
+      <td>${formatarMoeda(a.VALOR_TOTAL)}</td>
+      <td>${a.FORMA_PAGAMENTO || ''}</td>
+      <td>${a.OBSERVACOES || ''}</td>
     `;
     tbody.appendChild(tr);
   });
 }
 
-async function carregarDespesas() {
-  const data = await apiGet({ action: 'listDespesas' });
-  cacheDespesas = data.despesas || [];
-
+function renderTabelaDespesas() {
   const tbody = document.getElementById('tabelaDespesas');
   if (!tbody) return;
   tbody.innerHTML = '';
 
-  cacheDespesas.forEach((dp) => {
+  cacheDespesas.forEach(d => {
     const tr = document.createElement('tr');
     tr.innerHTML = `
-      <td>${formatarDataBR(dp.DATA)}</td>
-      <td>${dp.CATEGORIA || ''}</td>
-      <td>${dp.DESCRICAO || ''}</td>
-      <td>${formatarMoedaBR(dp.VALOR)}</td>
-      <td>${dp.FORMA_PAGAMENTO || ''}</td>
-      <td>${dp.OBSERVACOES || ''}</td>
+      <td>${formatarData(d.DATA)}</td>
+      <td>${d.CATEGORIA || ''}</td>
+      <td>${d.DESCRICAO || ''}</td>
+      <td>${formatarMoeda(d.VALOR)}</td>
+      <td>${d.FORMA_PAGAMENTO || ''}</td>
+      <td>${d.OBSERVACOES || ''}</td>
     `;
     tbody.appendChild(tr);
   });
 }
 
-// =======================================================
-// RESUMO FINANCEIRO
-// =======================================================
+// =============================
+// EVENTOS DOS FORMULÁRIOS
+// =============================
+
+function inicializarEventosFormularios() {
+  const formCli   = document.getElementById('formCliente');
+  const formServ  = document.getElementById('formServico');
+  const formAtend = document.getElementById('formAtendimento');
+  const formDesp  = document.getElementById('formDespesa');
+
+  // Cliente
+  if (formCli) {
+    formCli.addEventListener('submit', async (ev) => {
+      ev.preventDefault();
+      try {
+        const nome      = document.getElementById('clienteNome').value.trim();
+        const telefone  = document.getElementById('clienteTelefone').value.trim();
+        const observ    = document.getElementById('clienteObs').value.trim();
+
+        await apiPost('cliente', {
+          nome,
+          telefone,
+          observacoes: observ
+        });
+
+        formCli.reset();
+        await carregarDadosIniciais();
+        alert('Cliente salvo com sucesso.');
+      } catch (err) {
+        console.error('[ERRO salvar cliente]', err);
+        alert('Erro ao salvar cliente. Verifique o console.');
+      }
+    });
+  }
+
+  // Serviço
+  if (formServ) {
+    formServ.addEventListener('submit', async (ev) => {
+      ev.preventDefault();
+      try {
+        const nome      = document.getElementById('servicoNome').value.trim();
+        const categoria = document.getElementById('servicoCategoria').value.trim();
+        const precoBase = Number(document.getElementById('servicoPreco').value || 0);
+
+        await apiPost('servico', {
+          nomeServico: nome,
+          categoria,
+          precoBase,
+          ativo: true
+        });
+
+        formServ.reset();
+        await carregarDadosIniciais();
+        alert('Serviço salvo com sucesso.');
+      } catch (err) {
+        console.error('[ERRO salvar serviço]', err);
+        alert('Erro ao salvar serviço. Verifique o console.');
+      }
+    });
+  }
+
+  // Atendimento
+  if (formAtend) {
+    formAtend.addEventListener('submit', async (ev) => {
+      ev.preventDefault();
+      try {
+        const data        = document.getElementById('atData').value;
+        const idCliente   = document.getElementById('atCliente').value;
+        const idServico   = document.getElementById('atServico').value;
+        const valorTotal  = Number(document.getElementById('atValor').value || 0);
+        const formaPgto   = document.getElementById('atFormaPgto').value;
+        const observacoes = document.getElementById('atObs').value.trim();
+
+        await apiPost('atendimento', {
+          data,
+          idCliente,
+          idServico,
+          valorTotal,
+          formaPagamento: formaPgto,
+          observacoes
+        });
+
+        formAtend.reset();
+        await carregarDadosIniciais();
+        await atualizarResumoFinanceiro();
+        alert('Atendimento registrado com sucesso.');
+      } catch (err) {
+        console.error('[ERRO salvar atendimento]', err);
+        alert('Erro ao salvar atendimento. Verifique o console.');
+      }
+    });
+  }
+
+  // Despesa
+  if (formDesp) {
+    formDesp.addEventListener('submit', async (ev) => {
+      ev.preventDefault();
+      try {
+        const data        = document.getElementById('despData').value;
+        const categoria   = document.getElementById('despCategoria').value.trim();
+        const descricao   = document.getElementById('despDescricao').value.trim();
+        const valor       = Number(document.getElementById('despValor').value || 0);
+        const formaPgto   = document.getElementById('despFormaPgto').value;
+        const observacoes = document.getElementById('despObs').value.trim();
+
+        await apiPost('despesa', {
+          data,
+          categoria,
+          descricao,
+          valor,
+          formaPagamento: formaPgto,
+          observacoes
+        });
+
+        formDesp.reset();
+        await carregarDadosIniciais();
+        await atualizarResumoFinanceiro();
+        alert('Despesa registrada com sucesso.');
+      } catch (err) {
+        console.error('[ERRO salvar despesa]', err);
+        alert('Erro ao salvar despesa. Verifique o console.');
+      }
+    });
+  }
+}
+
+// =============================
+// RESUMO FINANCEIRO MENSAL
+// =============================
+
+function inicializarResumoFinanceiro() {
+  const campoMes = document.getElementById('mesResumo');
+  if (!campoMes) return;
+
+  // Define mês atual como padrão
+  const hoje = new Date();
+  const ano  = hoje.getFullYear();
+  const mes  = String(hoje.getMonth() + 1).padStart(2, '0');
+  campoMes.value = `${ano}-${mes}`;
+
+  campoMes.addEventListener('change', () => {
+    atualizarResumoFinanceiro().catch(err => {
+      console.error('[ERRO resumo financeiro - change]', err);
+    });
+  });
+
+  atualizarResumoFinanceiro().catch(err => {
+    console.error('[ERRO resumo financeiro - init]', err);
+  });
+}
 
 async function atualizarResumoFinanceiro() {
-  const mesResumo = document.getElementById('mesResumo');
-  if (!mesResumo || !mesResumo.value) return;
+  const campoMes = document.getElementById('mesResumo');
+  if (!campoMes || !campoMes.value) return;
 
   try {
-    const data = await apiGet({
-      action: 'resumoMensal',
-      mes: mesResumo.value
-    });
+    const dados = await apiGet('resumoMensal', { mes: campoMes.value });
 
-    const elEntradas = document.getElementById('resumoEntradas');
-    const elSaidas = document.getElementById('resumoSaidas');
+    const elEntradas  = document.getElementById('resumoEntradas');
+    const elSaidas    = document.getElementById('resumoSaidas');
     const elResultado = document.getElementById('resumoResultado');
 
-    if (elEntradas) {
-      elEntradas.textContent = formatarMoedaBR(data.totalEntradas || 0);
-    }
-    if (elSaidas) {
-      elSaidas.textContent = formatarMoedaBR(data.totalSaidas || 0);
-    }
-    if (elResultado) {
-      elResultado.textContent = formatarMoedaBR(data.resultado || 0);
-    }
+    if (elEntradas)  elEntradas.textContent  = formatarMoeda(dados.totalEntradas || 0);
+    if (elSaidas)    elSaidas.textContent    = formatarMoeda(dados.totalSaidas   || 0);
+    if (elResultado) elResultado.textContent = formatarMoeda(dados.resultado     || 0);
   } catch (err) {
-    console.error('Erro ao atualizar resumo financeiro:', err);
+    console.error('[ERRO resumoMensal]', err);
     alert('Erro ao atualizar resumo financeiro. Verifique o console.');
   }
 }
 
-// =======================================================
-// HANDLERS DE FORMULÁRIO
-// =======================================================
-
-async function handleSubmitCliente(e) {
-  e.preventDefault();
-  const nome = document.getElementById('clienteNome').value.trim();
-  const telefone = document.getElementById('clienteTelefone').value.trim();
-  const obs = document.getElementById('clienteObs').value.trim();
-
-  if (!nome) {
-    alert('Informe o nome do cliente.');
-    return;
-  }
-
-  try {
-    await apiPost({
-      tipoRegistro: 'cliente',
-      nome,
-      telefone,
-      observacoes: obs
-    });
-    alert('Cliente salvo com sucesso!');
-    e.target.reset();
-    await carregarClientes();
-  } catch (err) {
-    console.error('Erro ao salvar cliente:', err);
-    alert('Erro ao salvar cliente. Verifique o console.');
-  }
-}
-
-async function handleSubmitServico(e) {
-  e.preventDefault();
-  const nomeServico = document.getElementById('servicoNome').value.trim();
-  const categoria = document.getElementById('servicoCategoria').value.trim();
-  const precoBase = Number(
-    document.getElementById('servicoPreco').value.replace(',', '.')
-  ) || 0;
-
-  if (!nomeServico) {
-    alert('Informe o nome do serviço.');
-    return;
-  }
-
-  try {
-    await apiPost({
-      tipoRegistro: 'servico',
-      nomeServico,
-      categoria,
-      precoBase,
-      ativo: true
-    });
-    alert('Serviço salvo com sucesso!');
-    e.target.reset();
-    await carregarServicos();
-  } catch (err) {
-    console.error('Erro ao salvar serviço:', err);
-    alert('Erro ao salvar serviço. Verifique o console.');
-  }
-}
-
-async function handleSubmitAtendimento(e) {
-  e.preventDefault();
-
-  const data = document.getElementById('atData').value;
-  const idCliente = document.getElementById('atCliente').value;
-  const idServico = document.getElementById('atServico').value;
-  const valorStr = document.getElementById('atValor').value;
-  const formaPagamento = document.getElementById('atFormaPgto').value;
-  const obs = document.getElementById('atObs').value.trim();
-
-  const valorTotal = Number(valorStr.replace(',', '.')) || 0;
-
-  if (!data || !idCliente || !idServico || !valorTotal || !formaPagamento) {
-    alert('Preencha todos os campos obrigatórios do atendimento.');
-    return;
-  }
-
-  try {
-    await apiPost({
-      tipoRegistro: 'atendimento',
-      data,
-      idCliente,
-      idServico,
-      valorTotal,
-      formaPagamento,
-      observacoes: obs
-    });
-
-    alert('Atendimento registrado com sucesso!');
-    e.target.reset();
-
-    await Promise.all([
-      carregarAtendimentos(),
-      atualizarResumoFinanceiro()
-    ]);
-  } catch (err) {
-    console.error('Erro ao salvar atendimento:', err);
-    alert('Erro ao salvar atendimento. Verifique o console.');
-  }
-}
-
-async function handleSubmitDespesa(e) {
-  e.preventDefault();
-
-  const data = document.getElementById('despData').value;
-  const categoria = document.getElementById('despCategoria').value.trim();
-  const descricao = document.getElementById('despDescricao').value.trim();
-  const valorStr = document.getElementById('despValor').value;
-  const formaPagamento = document.getElementById('despFormaPgto').value;
-  const obs = document.getElementById('despObs').value.trim();
-
-  const valor = Number(valorStr.replace(',', '.')) || 0;
-
-  if (!data || !categoria || !valor) {
-    alert('Preencha data, categoria e valor da despesa.');
-    return;
-  }
-
-  try {
-    await apiPost({
-      tipoRegistro: 'despesa',
-      data,
-      categoria,
-      descricao,
-      valor,
-      formaPagamento,
-      observacoes: obs
-    });
-
-    alert('Despesa registrada com sucesso!');
-    e.target.reset();
-
-    await Promise.all([
-      carregarDespesas(),
-      atualizarResumoFinanceiro()
-    ]);
-  } catch (err) {
-    console.error('Erro ao salvar despesa:', err);
-    alert('Erro ao salvar despesa. Verifique o console.');
-  }
-}
-// Fluxograma resumido (script.js):
-// Entrada → usuário abre página e tenta logar
-// Validação → loginUsuario/loginSenha (dagmar ou cadastro + 1234)
-// Lógica → define papel (admin ou cadastro), esconde tela de login e mostra app
-// Saída → app inicializado com permissões do papel
-// Versão 1.5 — 29/11/2025 / Mudança: inclusão de login simples e controle de permissões
-
-let papelAtual = null; // 'admin' ou 'cadastro'
+// =============================
+// INICIALIZAÇÃO GERAL
+// =============================
 
 document.addEventListener('DOMContentLoaded', () => {
-  inicializarLogin();
+  configurarLogin();
 });
-
-function inicializarLogin() {
-  const loginWrapper = document.getElementById('loginWrapper');
-  const appMain      = document.getElementById('appMain');
-  const loginForm    = document.getElementById('loginForm');
-  const inputUsuario = document.getElementById('loginUsuario');
-  const inputSenha   = document.getElementById('loginSenha');
-  const divErro      = document.getElementById('loginErro');
-
-  if (!loginWrapper || !appMain || !loginForm) {
-    console.warn('Elementos de login não encontrados. Iniciando app direto.');
-    inicializarApp(); // usa o que você já tinha para iniciar o app
-    return;
-  }
-
-  loginForm.addEventListener('submit', (e) => {
-    e.preventDefault();
-
-    const usuario = (inputUsuario.value || '').trim().toLowerCase();
-    const senha   = (inputSenha.value || '').trim();
-
-    if (divErro) divErro.classList.add('d-none');
-
-    if (!usuario || !senha) {
-      if (divErro) {
-        divErro.textContent = 'Informe usuário e senha.';
-        divErro.classList.remove('d-none');
-      } else {
-        alert('Informe usuário e senha.');
-      }
-      return;
-    }
-
-    if (senha !== '1234') {
-      if (divErro) {
-        divErro.textContent = 'Senha incorreta.';
-        divErro.classList.remove('d-none');
-      } else {
-        alert('Senha incorreta.');
-      }
-      inputSenha.focus();
-      return;
-    }
-
-    if (usuario === 'dagmar') {
-      papelAtual = 'admin';
-    } else if (usuario === 'cadastro') {
-      papelAtual = 'cadastro';
-    } else {
-      if (divErro) {
-        divErro.textContent = 'Usuário inválido. Use "dagmar" ou "cadastro".';
-        divErro.classList.remove('d-none');
-      } else {
-        alert('Usuário inválido. Use "dagmar" ou "cadastro".');
-      }
-      inputUsuario.focus();
-      return;
-    }
-
-    // Login OK → mostra app
-    loginWrapper.classList.add('d-none');
-    appMain.classList.remove('d-none');
-
-    aplicarPermissoesPorPapel(papelAtual);
-    inicializarApp(); // aqui você chama a função que já carrega clientes, serviços etc.
-  });
-}
-
-function aplicarPermissoesPorPapel(papel) {
-  if (papel !== 'cadastro') {
-    // admin vê tudo
-    return;
-  }
-
-  const alvosAdminTargets = [
-    '#secNovoCliente',
-    '#secNovoServico',
-    '#secNovaDespesa',
-    '#secListaClientes',
-    '#secListaServicos',
-    '#secListaDespesas',
-    '#secHistorico'
-  ];
-
-  alvosAdminTargets.forEach((target) => {
-    // botões que abrem os collapses
-    document
-      .querySelectorAll(`[data-bs-target="${target}"]`)
-      .forEach((btn) => btn.classList.add('d-none'));
-
-    // própria seção
-    const sec = document.querySelector(target);
-    if (sec) sec.classList.add('d-none');
-  });
-}
-
