@@ -305,66 +305,66 @@ function configurarLogin() {
 // CARREGAMENTO INICIAL
 // =============================
 
+/**
+ * Fluxograma (carregarDadosIniciais):
+ * Entrada  → chamada após login
+ * Validação → chama API para 4 listas (clientes, serviços, atendimentos, despesas)
+ * Lógica → usa Promise.allSettled + apiGet(throwOnError=false), preenche caches mesmo com falhas parciais
+ * Saída   → selects e tabelas atualizados; logs de erro/aviso se algo falhar
+ * Versão 1.8 — 29/11/2025 / Mudança: tolerância a falha em uma action e logs mais claros
+ */
 async function carregarDadosIniciais() {
   console.log('[INFO] Carregando dados iniciais...');
 
-  try {
-    // Dispara todas as chamadas em paralelo, mas não quebra se uma falhar
-    const resultados = await Promise.allSettled([
-      apiGet('listClientes'),
-      apiGet('listServicos'),
-      apiGet('listAtendimentos'),
-      apiGet('listDespesas')
-    ]);
+  const [
+    rClientes,
+    rServicos,
+    rAtend,
+    rDespesas
+  ] = await Promise.allSettled([
+    apiGet('listClientes',      {}, { throwOnError: false }),
+    apiGet('listServicos',      {}, { throwOnError: false }),
+    apiGet('listAtendimentos',  {}, { throwOnError: false }),
+    apiGet('listDespesas',      {}, { throwOnError: false })
+  ]);
 
-    const [rClientes, rServicos, rAtend, rDespesas] = resultados;
-
-    // Helper para extrair array ou logar erro/aviso
-    function extrairDados(result, chavePayload, nomeRecurso) {
-      if (result.status === 'fulfilled') {
-        const payload = result.value || {};
-        const dados = payload[chavePayload];
-
-        if (Array.isArray(dados)) {
-          return dados;
-        } else {
-          console.warn(
-            `[WARN] ${nomeRecurso}: payload sem array '${chavePayload}'.`,
-            payload
-          );
-          return [];
-        }
-      } else {
-        console.error(
-          `[ERRO] Falha ao carregar ${nomeRecurso}:`,
-          result.reason
-        );
-        return [];
-      }
+  function extrair(result, nomeRecurso, chave) {
+    if (result.status === 'rejected') {
+      console.error(`[ERRO] ${nomeRecurso} (Promise rejeitada):`, result.reason);
+      return [];
     }
 
-    // Atualiza caches com o que deu certo (ou [] se falhou)
-    cacheClientes     = extrairDados(rClientes,  'clientes',     'clientes');
-    cacheServicos     = extrairDados(rServicos,  'servicos',     'serviços');
-    cacheAtendimentos = extrairDados(rAtend,     'atendimentos', 'atendimentos');
-    cacheDespesas     = extrairDados(rDespesas,  'despesas',     'despesas');
+    const data = result.value || {};
+    if (!data.sucesso) {
+      console.warn(`[WARN] ${nomeRecurso}: sucesso=false →`, data.mensagem || '(sem mensagem)');
+      return [];
+    }
 
-    // Atualiza selects e tabelas
-    preencherSelectClientes();
-    preencherSelectServicos();
+    const arr = data[chave];
+    if (!Array.isArray(arr)) {
+      console.warn(`[WARN] ${nomeRecurso}: payload sem array '${chave}'.`, data);
+      return [];
+    }
 
-    renderTabelaClientes();
-    renderTabelaServicos();
-    renderTabelaAtendimentos();
-    renderTabelaDespesas();
-
-    console.log('[INFO] Dados iniciais carregados (veja avisos acima, se houver).');
-  } catch (err) {
-    // Só entra aqui se houver um erro inesperado (ex.: bug em renderTabelaX)
-    console.error('[ERRO] carregarDadosIniciais (erro inesperado):', err);
-    throw err; // mantém o alerta do fluxo de login
+    return arr;
   }
+
+  cacheClientes     = extrair(rClientes,  'clientes',     'clientes');
+  cacheServicos     = extrair(rServicos,  'serviços',     'servicos');
+  cacheAtendimentos = extrair(rAtend,     'atendimentos', 'atendimentos');
+  cacheDespesas     = extrair(rDespesas,  'despesas',     'despesas');
+
+  preencherSelectClientes();
+  preencherSelectServicos();
+
+  renderTabelaClientes();
+  renderTabelaServicos();
+  renderTabelaAtendimentos();
+  renderTabelaDespesas();
+
+  console.log('[INFO] Dados iniciais carregados (mesmo com falhas parciais, se houver).');
 }
+
 
 // =============================
 // PREENCHIMENTO DE SELECTS
@@ -654,5 +654,6 @@ document.addEventListener('DOMContentLoaded', () => {
   console.log('[INFO] DOM carregado, iniciando configuração de login...');
   configurarLogin();
 });
+
 
 
