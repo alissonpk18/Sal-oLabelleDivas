@@ -313,6 +313,9 @@ function configurarLogin() {
  * Saída   → selects e tabelas atualizados; logs de erro/aviso se algo falhar
  * Versão 1.8 — 29/11/2025 / Mudança: tolerância a falha em uma action e logs mais claros
  */
+// =============================
+// CARREGAMENTO INICIAL (NOVA VERSÃO)
+// =============================
 async function carregarDadosIniciais() {
   console.log('[INFO] Carregando dados iniciais...');
 
@@ -322,27 +325,27 @@ async function carregarDadosIniciais() {
     rAtend,
     rDespesas
   ] = await Promise.allSettled([
-    apiGet('listClientes',      {}, { throwOnError: false }),
-    apiGet('listServicos',      {}, { throwOnError: false }),
-    apiGet('listAtendimentos',  {}, { throwOnError: false }),
-    apiGet('listDespesas',      {}, { throwOnError: false })
+    apiGet('listClientes',     {}, { throwOnError: false }),
+    apiGet('listServicos',     {}, { throwOnError: false }),
+    apiGet('listAtendimentos', {}, { throwOnError: false }),
+    apiGet('listDespesas',     {}, { throwOnError: false })
   ]);
 
-  function extrair(result, nomeRecurso, chave) {
+  function extrair(result, recurso, chaveArray) {
     if (result.status === 'rejected') {
-      console.error(`[ERRO] ${nomeRecurso} (Promise rejeitada):`, result.reason);
+      console.error(`[ERRO] ${recurso}: Promise rejeitada`, result.reason);
       return [];
     }
 
     const data = result.value || {};
     if (!data.sucesso) {
-      console.warn(`[WARN] ${nomeRecurso}: sucesso=false →`, data.mensagem || '(sem mensagem)');
+      console.warn(`[WARN] ${recurso}: sucesso=false →`, data.mensagem || '(sem mensagem)');
       return [];
     }
 
-    const arr = data[chave];
+    const arr = data[chaveArray];
     if (!Array.isArray(arr)) {
-      console.warn(`[WARN] ${nomeRecurso}: payload sem array '${chave}'.`, data);
+      console.warn(`[WARN] ${recurso}: payload sem array "${chaveArray}"`, data);
       return [];
     }
 
@@ -362,7 +365,7 @@ async function carregarDadosIniciais() {
   renderTabelaAtendimentos();
   renderTabelaDespesas();
 
-  console.log('[INFO] Dados iniciais carregados (mesmo com falhas parciais, se houver).');
+  console.log('[INFO] Dados iniciais carregados (com tolerância a falhas).');
 }
 
 
@@ -654,6 +657,7 @@ document.addEventListener('DOMContentLoaded', () => {
   console.log('[INFO] DOM carregado, iniciando configuração de login...');
   configurarLogin();
 });
+
 
 
 
