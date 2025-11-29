@@ -1,0 +1,160 @@
+/* style.css */
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700&display=swap');
+
+:root {
+    --primary-blue: #0d47a1;
+    /* Azul Forte */
+    --primary-pink: #d81b60;
+    /* Rosa Forte */
+    --accent-pink: #f48fb1;
+    --light-bg: #f8f9fa;
+    --text-dark: #333;
+    --gradient-header: linear-gradient(135deg, var(--primary-blue) 0%, var(--primary-pink) 100%);
+    --card-shadow: 0 10px 20px rgba(0, 0, 0, 0.05);
+    --card-hover-shadow: 0 15px 30px rgba(0, 0, 0, 0.1);
+}
+
+body {
+    font-family: 'Poppins', sans-serif;
+    background-color: #f0f2f5;
+    color: var(--text-dark);
+}
+
+/* Header Styling */
+header {
+    background: var(--gradient-header) !important;
+    color: white;
+    border-bottom: none;
+}
+
+header h1 {
+    font-weight: 700;
+    letter-spacing: 0.5px;
+}
+
+header p {
+    color: rgba(255, 255, 255, 0.9) !important;
+}
+
+/* Card Styling */
+.card {
+    border: none;
+    border-radius: 12px;
+    box-shadow: var(--card-shadow);
+    transition: all 0.3s ease;
+    overflow: hidden;
+}
+
+.card:hover {
+    transform: translateY(-5px);
+    box-shadow: var(--card-hover-shadow);
+}
+
+.card-header {
+    background-color: white;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+    padding: 1.25rem;
+}
+
+.card-title {
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+/* Custom Colors for Card Titles */
+.text-primary-custom {
+    color: var(--primary-blue);
+}
+
+.text-pink-custom {
+    color: var(--primary-pink);
+}
+
+/* Buttons */
+.btn-primary-custom {
+    background: var(--primary-blue);
+    border: none;
+    padding: 10px 20px;
+    font-weight: 500;
+    transition: all 0.3s;
+}
+
+.btn-primary-custom:hover {
+    background: #0a367a;
+    /* Darker blue */
+    transform: scale(1.02);
+}
+
+.btn-pink-custom {
+    background: var(--primary-pink);
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    font-weight: 500;
+    transition: all 0.3s;
+}
+
+.btn-pink-custom:hover {
+    background: #ad1457;
+    /* Darker pink */
+    color: white;
+    transform: scale(1.02);
+}
+
+/* Form Controls */
+.form-control,
+.form-select {
+    border-radius: 8px;
+    border: 1px solid #dee2e6;
+    padding: 10px 15px;
+}
+
+.form-control:focus,
+.form-select:focus {
+    border-color: var(--primary-pink);
+    box-shadow: 0 0 0 0.2rem rgba(216, 27, 96, 0.25);
+}
+
+/* Summary Section */
+.summary-card {
+    background: white;
+    border-radius: 12px;
+}
+
+.summary-item strong {
+    font-size: 1.5rem;
+    font-weight: 700;
+}
+
+/* Tables */
+.table thead th {
+    background-color: var(--primary-blue);
+    color: white;
+    font-weight: 500;
+    border: none;
+}
+
+.table-hover tbody tr:hover {
+    background-color: rgba(216, 27, 96, 0.05);
+    /* Light pink hover */
+}
+
+/* Footer */
+footer {
+    color: #6c757d;
+}
+
+/* Icons Colors */
+.bi-person-plus {
+    color: var(--primary-blue);
+}
+
+.bi-scissors {
+    color: var(--primary-pink);
+}
+
+.bi-cash-coin {
+    color: #28a745;
+}
