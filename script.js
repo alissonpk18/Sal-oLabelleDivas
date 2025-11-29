@@ -172,29 +172,59 @@ function preencherTabelaServicos() {
 
 function preencherTabelaAtendimentos() {
     const tbody = document.getElementById('tabelaAtendimentos');
+    if (!tbody) return;
+
     tbody.innerHTML = '';
 
     cacheAtendimentos.forEach(at => {
         const tr = document.createElement('tr');
 
+        // Data
         const data = formatarDataSimples(at.DATA || at.data);
-        const idCliente = at.ID_CLIENTE || at.idCliente;
-        const idServico = at.ID_SERVICO || at.idServico;
+
+        // Campos que podem vir do backend
+        const idCliente   = at.ID_CLIENTE   || at.idCliente   || '';
+        const idServico   = at.ID_SERVICO   || at.idServico   || '';
+        const nomeCliRaw  = at.CLIENTE      || at.cliente     || '';
+        const nomeServRaw = at.SERVICO      || at.servico     || '';
+
         const valor = parseFloat(at.VALOR_TOTAL || at.valorTotal || 0);
-        const pgto = at.FORMA_PAGAMENTO || at.formaPagamento || '';
-        const obs = at.OBSERVACOES || at.OBS || at.observacoes || '';
+        const pgto  = at.FORMA_PAGAMENTO || at.formaPagamento || '';
+        const obs   = at.OBSERVACOES     || at.OBS || at.observacoes || '';
 
-        const clienteObj = cacheClientes.find(
-            c => (c.ID_CLIENTE || c.idCliente) == idCliente
-        );
-        const nomeCliente = clienteObj ? (clienteObj.NOME || clienteObj.nome) : 'Desconhecido';
+        // ============================
+        // Resolver nome do cliente
+        // ============================
+        let nomeCliente = 'Desconhecido';
 
-        const servicoObj = cacheServicos.find(
-            s => (s.ID_SERVICO || s.idServico) == idServico
-        );
-        const nomeServico = servicoObj
-            ? (servicoObj.NOME_SERVICO || servicoObj.NOME || servicoObj.nomeServico)
-            : 'Desconhecido';
+        if (idCliente) {
+            const cli = cacheClientes.find(c => (c.ID_CLIENTE || c.idCliente) == idCliente);
+            if (cli) {
+                nomeCliente = cli.NOME || cli.nome || nomeCliRaw || 'Desconhecido';
+            } else if (nomeCliRaw) {
+                // Se não encontrou por ID, usa o nome que veio direto no atendimento
+                nomeCliente = nomeCliRaw;
+            }
+        } else if (nomeCliRaw) {
+            // Não veio ID, mas veio nome direto
+            nomeCliente = nomeCliRaw;
+        }
+
+        // ============================
+        // Resolver nome do serviço
+        // ============================
+        let nomeServico = 'Desconhecido';
+
+        if (idServico) {
+            const serv = cacheServicos.find(s => (s.ID_SERVICO || s.idServico) == idServico);
+            if (serv) {
+                nomeServico = serv.NOME_SERVICO || serv.NOME || serv.nomeServico || nomeServRaw || 'Desconhecido';
+            } else if (nomeServRaw) {
+                nomeServico = nomeServRaw;
+            }
+        } else if (nomeServRaw) {
+            nomeServico = nomeServRaw;
+        }
 
         tr.innerHTML = `
             <td>${data}</td>
@@ -208,21 +238,6 @@ function preencherTabelaAtendimentos() {
     });
 }
 
-function preencherSelectClientes() {
-    const select = document.getElementById('atCliente');
-    select.innerHTML = '<option value="">Selecione um cliente...</option>';
-
-    cacheClientes.forEach(c => {
-        const id = c.ID_CLIENTE || c.idCliente;
-        const nome = c.NOME || c.nome;
-        if (!id || !nome) return;
-
-        const option = document.createElement('option');
-        option.value = id;
-        option.textContent = nome;
-        select.appendChild(option);
-    });
-}
 
 function preencherSelectServicos() {
     const select = document.getElementById('atServico');
@@ -406,4 +421,5 @@ function escapeHTML(texto) {
         .replace(/"/g, "&quot;")
         .replace(/'/g, "&#039;");
 }
+
 
