@@ -1,23 +1,47 @@
 /**
- * Fluxograma resumido (Apps Script CRM):
+ * Fluxograma resumido (Apps Script CRM Financeiro):
  * Entrada → requisições HTTP GET/POST do site (GitHub Pages)
  * Validação → checar parâmetro "action" (GET) ou "tipoRegistro" (POST)
- * Lógica → ler/escrever nas abas CLIENTES, SERVICOS, ATENDIMENTOS, DESPESAS
+ * Lógica → ler/escrever nas abas CLIENTES, SERVICOS, ATENDIMENTOS, DESPESAS e calcular resumoMensal
  * Saída → JSON com {sucesso, mensagem, ...dados}
- * Versão 1.4 — 29/11/2025 / Mudança: inclusão de cadastro e listagem de DESPESAS
+ * Versão 1.5 — 29/11/2025 / Mudança: inclusão de resumoMensal + fallback para abrir planilha por nome
  */
 
-// Nomes das abas da planilha
+// =========================
+// CONFIGURAÇÃO BÁSICA
+// =========================
+const NOME_PLANILHA     = 'CRM_Financeiro_Salao';  // ajuste para o nome exato da planilha
 const ABA_CLIENTES      = 'CLIENTES';
 const ABA_SERVICOS      = 'SERVICOS';
 const ABA_ATENDIMENTOS  = 'ATENDIMENTOS';
 const ABA_DESPESAS      = 'DESPESAS';
 
+// =========================
+// FUNÇÕES DE APOIO
+// =========================
+
+function getSpreadsheet_() {
+  // Tenta pegar a planilha ativa (script vinculado). Se não der, abre por nome.
+  try {
+    const ssAtiva = SpreadsheetApp.getActiveSpreadsheet();
+    if (ssAtiva) return ssAtiva;
+  } catch (e) {
+    // ignora e tenta por nome
+  }
+  return SpreadsheetApp.openByName(NOME_PLANILHA);
+}
+
 function getSheet_(nomeAba) {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = getSpreadsheet_();
   const sh = ss.getSheetByName(nomeAba);
   if (!sh) throw new Error('Aba não encontrada: ' + nomeAba);
   return sh;
+}
+
+function json_(obj) {
+  return ContentService
+    .createTextOutput(JSON.stringify(obj))
+    .setMimeType(ContentService.MimeType.JSON);
 }
 
 // =========================
@@ -28,19 +52,28 @@ function doGet(e) {
   let resp;
   try {
     const action = e && e.parameter && e.parameter.action;
+
     switch (action) {
       case 'listClientes':
         resp = { sucesso: true, clientes: listarClientes_() };
         break;
+
       case 'listServicos':
         resp = { sucesso: true, servicos: listarServicos_() };
         break;
+
       case 'listAtendimentos':
         resp = { sucesso: true, atendimentos: listarAtendimentos_() };
         break;
+
       case 'listDespesas':
         resp = { sucesso: true, despesas: listarDespesas_() };
         break;
+
+      case 'resumoMensal':
+        resp = resumoMensal_(e);
+        break;
+
       default:
         resp = {
           sucesso: false,
@@ -51,9 +84,7 @@ function doGet(e) {
     resp = { sucesso: false, mensagem: 'Erro interno (GET): ' + err };
   }
 
-  return ContentService
-    .createTextOutput(JSON.stringify(resp))
-    .setMimeType(ContentService.MimeType.JSON);
+  return json_(resp);
 }
 
 function doPost(e) {
@@ -63,12 +94,10 @@ function doPost(e) {
       body = JSON.parse(e.postData.contents);
     }
   } catch (err) {
-    return ContentService
-      .createTextOutput(JSON.stringify({
-        sucesso: false,
-        mensagem: 'JSON inválido no corpo da requisição.'
-      }))
-      .setMimeType(ContentService.MimeType.JSON);
+    return json_({
+      sucesso: false,
+      mensagem: 'JSON inválido no corpo da requisição.'
+    });
   }
 
   let resp;
@@ -78,15 +107,19 @@ function doPost(e) {
       case 'cliente':
         resp = salvarCliente_(body);
         break;
+
       case 'servico':
         resp = salvarServico_(body);
         break;
+
       case 'atendimento':
         resp = salvarAtendimento_(body);
         break;
+
       case 'despesa':
         resp = salvarDespesa_(body);
         break;
+
       default:
         resp = {
           sucesso: false,
@@ -97,9 +130,7 @@ function doPost(e) {
     resp = { sucesso: false, mensagem: 'Erro interno (POST): ' + err2 };
   }
 
-  return ContentService
-    .createTextOutput(JSON.stringify(resp))
-    .setMimeType(ContentService.MimeType.JSON);
+  return json_(resp);
 }
 
 // =========================
@@ -161,7 +192,7 @@ function salvarServico_(dados) {
   const nome = (dados.nomeServico || dados.nome || '').toString().trim();
   const categoria = (dados.categoria || '').toString().trim();
   const precoBase = Number(dados.precoBase) || 0;
-  const ativo = dados.ativo === false ? false : true;
+  const ativo = dados.ativo === false ? false : true; // padrão true
 
   if (!nome) {
     return { sucesso: false, mensagem: 'Nome do serviço é obrigatório.' };
@@ -217,10 +248,10 @@ function salvarAtendimento_(dados) {
   const formaPagamento = (dados.formaPagamento || '').toString().trim();
   const obs = (dados.observacoes || '').toString().trim();
 
-  if (!idCliente || !idServico || !dataStr) {
+  if (!dataStr || !idCliente || !idServico || !formaPagamento || valorTotal <= 0) {
     return {
       sucesso: false,
-      mensagem: 'Data, cliente e serviço são obrigatórios.'
+      mensagem: 'Campos obrigatórios: data, cliente, serviço, formaPagamento e valorTotal > 0.'
     };
   }
 
@@ -276,10 +307,10 @@ function salvarDespesa_(dados) {
   const formaPagamento = (dados.formaPagamento || '').toString().trim();
   const obs = (dados.observacoes || '').toString().trim();
 
-  if (!dataStr || !categoria) {
+  if (!dataStr || !categoria || valor <= 0) {
     return {
       sucesso: false,
-      mensagem: 'Data e categoria da despesa são obrigatórias.'
+      mensagem: 'Data, categoria e valor > 0 são obrigatórios para despesa.'
     };
   }
 
@@ -317,6 +348,11 @@ function listarDespesas_() {
   }
   return out;
 }
+
+// =========================
+// RESUMO MENSAL (ENTRADAS x SAÍDAS)
+// =========================
+
 function resumoMensal_(e) {
   const mesParam = e && e.parameter && e.parameter.mes;
   if (!mesParam) {
@@ -383,4 +419,3 @@ function resumoMensal_(e) {
     resultado:     totalEntradas - totalSaidas
   };
 }
-
