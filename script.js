@@ -26,6 +26,10 @@ const LOGIN_USERS = {
 const LOGIN_SENHA = '1234';
 
 let currentRole = null;
+await carregarDadosIniciais();
+inicializarEventosFormularios();
+inicializarResumoFinanceiro();
+
 
 // =============================
 // FUNÇÕES AUXILIARES
@@ -181,17 +185,17 @@ function configurarLogin() {
 
 async function carregarDadosIniciais() {
   console.log('[INFO] Carregando dados iniciais...');
-  const [
-    dadosClientes,
-    dadosServicos,
-    dadosAtend,
-    dadosDespesas
-  ] = await Promise.all([
-    apiGet('listClientes'),
-    apiGet('listServicos'),
-    apiGet('listAtendimentos'),
-    apiGet('listDespesas')
-  ]);
+const [
+  dadosClientes,
+  dadosServicos,
+  dadosAtend,
+  dadosDespesas
+] = await Promise.all([
+  apiGet('listClientes'),
+  apiGet('listServicos'),
+  apiGet('listAtendimentos'),
+  apiGet('listDespesas')
+]);
 
   cacheClientes     = dadosClientes.clientes     || [];
   cacheServicos     = dadosServicos.servicos     || [];
@@ -496,4 +500,5 @@ async function atualizarResumoFinanceiro() {
 document.addEventListener('DOMContentLoaded', () => {
   configurarLogin();
 });
+
 
