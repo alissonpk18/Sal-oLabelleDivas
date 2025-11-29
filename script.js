@@ -4,7 +4,7 @@
  * # Validação: checar campos obrigatórios (nome, datas, valores, seleções) antes de enviar para a API
  * # Lógica: usar fetch (GET/POST) na URL do Apps Script → criar registros (cliente, serviço, atendimento) ou ler listas/resumos
  * # Saída: atualização das tabelas na tela e dos indicadores de resumo mensal, sempre refletindo o que está na planilha
- * # Versão 1.2 — 29/11/2025 / Mudança: correções em select de clientes/serviços, tabelas e integração com Apps Script
+ * # Versão 1.3 — 29/11/2025 / Mudança: detecção genérica de campos (Nome/Cliente) p/ popular select e tabela
  */
 
 // 1. CONFIGURAÇÃO PRINCIPAL
@@ -15,13 +15,161 @@ let cacheClientes = [];
 let cacheServicos = [];
 let cacheAtendimentos = [];
 
-// Função utilitária para requisições (lança erro em caso de falha)
+// =========================
+// 1.1. HELPERS DE CAMPOS
+// =========================
+
+function getCampo(obj, prioridades = [], filtros = []) {
+    if (!obj || typeof obj !== 'object') return '';
+
+    // 1) tenta pelas chaves de prioridade (nomes específicos)
+    for (const k of prioridades) {
+        if (k in obj && obj[k]) return obj[k];
+    }
+
+    // 2) tenta por filtros de substring no nome da chave
+    if (filtros.length > 0) {
+        for (const k of Object.keys(obj)) {
+            const lk = k.toLowerCase();
+            if (filtros.some(f => lk.includes(f))) {
+                if (obj[k]) return obj[k];
+            }
+        }
+    }
+
+    return '';
+}
+
+// Cliente
+function extrairNomeCliente(c) {
+    return getCampo(
+        c,
+        [
+            'NOME', 'Nome', 'nome',
+            'CLIENTE', 'Cliente',
+            'NOME COMPLETO', 'Nome Completo', 'NOME COMPLETO *',
+            'nome_completo'
+        ],
+        ['nome', 'client']
+    );
+}
+
+function extrairTelefoneCliente(c) {
+    return getCampo(
+        c,
+        ['TELEFONE', 'Telefone', 'telefone', 'CELULAR', 'Celular', 'celular'],
+        ['tel', 'fone', 'cel']
+    );
+}
+
+function extrairObsCliente(c) {
+    return getCampo(
+        c,
+        ['OBS', 'Obs', 'OBSERVACOES', 'Observações', 'OBSERVAÇÕES', 'observacoes'],
+        ['obs', 'observ']
+    );
+}
+
+function extrairDataCliente(c) {
+    return getCampo(
+        c,
+        ['DATA_CADASTRO', 'DATA_CAD', 'dataCadastro', 'DataCadastro'],
+        ['data', 'cadast']
+    );
+}
+
+function extrairIdCliente(c) {
+    const v = getCampo(
+        c,
+        ['ID_CLIENTE', 'idCliente', 'ID', 'id', 'CODIGO', 'Código', 'codigo'],
+        ['id', 'cod']
+    );
+    return v || null;
+}
+
+// Serviço
+function extrairNomeServico(s) {
+    return getCampo(
+        s,
+        ['NOME_SERVICO', 'Nome_servico', 'NOME', 'Nome', 'nome', 'SERVICO', 'Serviço', 'servico'],
+        ['servi', 'nome']
+    );
+}
+
+function extrairCategoriaServico(s) {
+    return getCampo(
+        s,
+        ['CATEGORIA', 'Categoria', 'categoria', 'TIPO', 'Tipo'],
+        ['categ']
+    );
+}
+
+function extrairPrecoServico(s) {
+    const raw = getCampo(
+        s,
+        ['PRECO_BASE', 'Preco_base', 'precoBase', 'PREÇO', 'Preço'],
+        ['preco', 'preço']
+    );
+    return parseFloat(raw || 0);
+}
+
+function extrairAtivoServico(s) {
+    const val = getCampo(
+        s,
+        ['ATIVO', 'Ativo', 'ativo', 'STATUS', 'Status'],
+        ['ativo', 'status']
+    );
+    if (
+        val === true ||
+        val === 'true' || val === 'TRUE' ||
+        val === 'Sim'  || val === 'SIM'  ||
+        val === 'Ativo'|| val === 'ATIVO'
+    ) return 'Sim';
+    return 'Não';
+}
+
+// Atendimento (aproveita helpers de cliente/serviço quando possível)
+function extrairIdAtendimentoCliente(at) {
+    return getCampo(
+        at,
+        ['ID_CLIENTE', 'idCliente', 'IDCLIENTE'],
+        ['id_client']
+    );
+}
+
+function extrairNomeAtendimentoCliente(at) {
+    return getCampo(
+        at,
+        ['CLIENTE', 'Cliente', 'NOME_CLIENTE', 'NomeCliente', 'nomeCliente'],
+        ['client', 'nome']
+    );
+}
+
+function extrairIdAtendimentoServico(at) {
+    return getCampo(
+        at,
+        ['ID_SERVICO', 'idServico', 'IDSERVICO'],
+        ['id_serv']
+    );
+}
+
+function extrairNomeAtendimentoServico(at) {
+    return getCampo(
+        at,
+        ['SERVICO', 'Serviço', 'Servico', 'NOME_SERVICO', 'nomeServico'],
+        ['servi', 'nome']
+    );
+}
+
+// =========================
+// 2. FETCH BASE
+// =========================
+
 async function fetchJSON(url, options = {}) {
     const response = await fetch(url, options);
     if (!response.ok) {
         throw new Error(`Erro HTTP: ${response.status}`);
     }
-
     const text = await response.text();
     try {
         return JSON.parse(text);
@@ -31,7 +179,10 @@ async function fetchJSON(url, options = {}) {
     }
 }
 
-// Inicialização
+// =========================
+// 3. INICIALIZAÇÃO
+// =========================
+
 document.addEventListener('DOMContentLoaded', () => {
     const formCliente = document.getElementById('formCliente');
     const formServico = document.getElementById('formServico');
@@ -54,9 +205,7 @@ function inicializarMesResumo() {
     const ano = hoje.getFullYear();
     const mes = String(hoje.getMonth() + 1).padStart(2, '0');
     const campo = document.getElementById('mesResumo');
-    if (campo) {
-        campo.value = `${ano}-${mes}`;
-    }
+    if (campo) campo.value = `${ano}-${mes}`;
 }
 
 async function carregarDadosIniciais() {
@@ -73,7 +222,9 @@ async function carregarDadosIniciais() {
     }
 }
 
-// 2. FUNÇÕES GET (CARREGAR DADOS)
+// =========================
+// 4. FUNÇÕES GET (API)
+// =========================
 
 async function carregarClientes() {
     const url = `${URL_API}?action=listClientes`;
@@ -156,7 +307,9 @@ async function carregarResumoMensal() {
     }
 }
 
-// 3. PREENCHIMENTO DE TABELAS E SELECTS
+// =========================
+// 5. TABELAS E SELECTS
+// =========================
 
 function preencherTabelaClientes() {
     const tbody = document.getElementById('tabelaClientes');
@@ -165,39 +318,17 @@ function preencherTabelaClientes() {
     tbody.innerHTML = '';
 
     cacheClientes.forEach(c => {
-        const nome =
-            c.NOME ||
-            c.nome ||
-            c.Nome ||
-            c.CLIENTE ||
-            c.Cliente ||
-            '';
-        const telefone =
-            c.TELEFONE ||
-            c.telefone ||
-            c.Telefone ||
-            '';
-        const obs =
-            c.OBSERVACOES ||
-            c.OBS ||
-            c.observacoes ||
-            c.Obs ||
-            '';
-        const dataCadRaw =
-            c.DATA_CADASTRO ||
-            c.DATA_CAD ||
-            c.dataCadastro ||
-            c.DataCadastro ||
-            '';
+        const nome = extrairNomeCliente(c);
+        const telefone = extrairTelefoneCliente(c);
+        const obs = extrairObsCliente(c);
+        const dataCadRaw = extrairDataCliente(c);
         const dataCad = formatarDataSimples(dataCadRaw);
 
         const tr = document.createElement('tr');
-        const obsFinal = obs || dataCad;
-
         tr.innerHTML = `
             <td>${escapeHTML(nome)}</td>
             <td>${escapeHTML(telefone)}</td>
-            <td>${escapeHTML(obsFinal)}</td>
+            <td>${escapeHTML(obs || dataCad)}</td>
         `;
         tbody.appendChild(tr);
     });
@@ -209,30 +340,11 @@ function preencherTabelaServicos() {
 
     tbody.innerHTML = '';
 
-    cacheServicos.forEach(servico => {
-        const nome =
-            servico.NOME_SERVICO ||
-            servico.NOME ||
-            servico.nomeServico ||
-            servico.nome ||
-            '';
-        const categoria =
-            servico.CATEGORIA ||
-            servico.categoria ||
-            '';
-        const preco = parseFloat(servico.PRECO_BASE || servico.precoBase || 0);
-        const ativo = servico.ATIVO || servico.ativo;
-
-        let ativoTexto = 'Não';
-        if (
-            ativo === true ||
-            ativo === 'true' ||
-            ativo === 'TRUE' ||
-            ativo === 'Sim' ||
-            ativo === 'SIM'
-        ) {
-            ativoTexto = 'Sim';
-        }
+    cacheServicos.forEach(s => {
+        const nome = extrairNomeServico(s);
+        const categoria = extrairCategoriaServico(s);
+        const preco = extrairPrecoServico(s);
+        const ativoTexto = extrairAtivoServico(s);
 
         const tr = document.createElement('tr');
         tr.innerHTML = `
@@ -256,54 +368,31 @@ function preencherTabelaAtendimentos() {
 
         const data = formatarDataSimples(at.DATA || at.data);
 
-        const idCliente = at.ID_CLIENTE || at.idCliente || '';
-        const idServico = at.ID_SERVICO || at.idServico || '';
-        const nomeCliRaw = at.CLIENTE || at.cliente || at.nomeCliente || '';
-        const nomeServRaw = at.SERVICO || at.servico || at.nomeServico || '';
+        const idCliente = extrairIdAtendimentoCliente(at);
+        const nomeCliRaw = extrairNomeAtendimentoCliente(at);
+        const idServico = extrairIdAtendimentoServico(at);
+        const nomeServRaw = extrairNomeAtendimentoServico(at);
 
         const valor = parseFloat(at.VALOR_TOTAL || at.valorTotal || 0);
         const pgto = at.FORMA_PAGAMENTO || at.formaPagamento || '';
         const obs = at.OBSERVACOES || at.OBS || at.observacoes || '';
 
-        // Resolver nome do cliente
+        // Cliente: tenta achar no cache pelo ID; se não tiver, usa nome do próprio atendimento
         let nomeCliente = 'Desconhecido';
         if (idCliente) {
-            const cli = cacheClientes.find(
-                c => (c.ID_CLIENTE || c.idCliente || c.ID || c.id) == idCliente
-            );
-            if (cli) {
-                nomeCliente =
-                    cli.NOME ||
-                    cli.nome ||
-                    cli.Nome ||
-                    cli.CLIENTE ||
-                    cli.Cliente ||
-                    nomeCliRaw ||
-                    'Desconhecido';
-            } else if (nomeCliRaw) {
-                nomeCliente = nomeCliRaw;
-            }
+            const cli = cacheClientes.find(c => (extrairIdCliente(c) || extrairNomeCliente(c)) == idCliente);
+            if (cli) nomeCliente = extrairNomeCliente(cli) || nomeCliRaw || 'Desconhecido';
+            else if (nomeCliRaw) nomeCliente = nomeCliRaw;
         } else if (nomeCliRaw) {
             nomeCliente = nomeCliRaw;
         }
 
-        // Resolver nome do serviço
+        // Serviço
         let nomeServico = 'Desconhecido';
         if (idServico) {
-            const serv = cacheServicos.find(
-                s => (s.ID_SERVICO || s.idServico || s.ID || s.id) == idServico
-            );
-            if (serv) {
-                nomeServico =
-                    serv.NOME_SERVICO ||
-                    serv.NOME ||
-                    serv.nomeServico ||
-                    serv.nome ||
-                    nomeServRaw ||
-                    'Desconhecido';
-            } else if (nomeServRaw) {
-                nomeServico = nomeServRaw;
-            }
+            const serv = cacheServicos.find(s => (extrairIdCliente(s) || extrairNomeServico(s)) == idServico); // reuso helper id genérico
+            if (serv) nomeServico = extrairNomeServico(serv) || nomeServRaw || 'Desconhecido';
+            else if (nomeServRaw) nomeServico = nomeServRaw;
         } else if (nomeServRaw) {
             nomeServico = nomeServRaw;
         }
@@ -326,22 +415,11 @@ function preencherSelectClientes() {
 
     select.innerHTML = '<option value="">Selecione um cliente...</option>';
 
-    cacheClientes.forEach((c) => {
-        const nome =
-            c.NOME ||
-            c.nome ||
-            c.Nome ||
-            c.CLIENTE ||
-            c.Cliente ||
-            '';
+    cacheClientes.forEach(c => {
+        const nome = extrairNomeCliente(c);
         if (!nome) return;
 
-        const id =
-            c.ID_CLIENTE ||
-            c.idCliente ||
-            c.ID ||
-            c.id ||
-            nome; // fallback: usa o nome como "ID"
+        const id = extrairIdCliente(c) || nome; // fallback: nome vira identificador
 
         const option = document.createElement('option');
         option.value = id;
@@ -356,21 +434,13 @@ function preencherSelectServicos() {
 
     select.innerHTML = '<option value="">Selecione um serviço...</option>';
 
-    cacheServicos.forEach((s) => {
-        const nome =
-            s.NOME_SERVICO ||
-            s.NOME ||
-            s.nomeServico ||
-            s.nome ||
-            '';
+    cacheServicos.forEach(s => {
+        const nome = extrairNomeServico(s);
         if (!nome) return;
 
         const id =
-            s.ID_SERVICO ||
-            s.idServico ||
-            s.ID ||
-            s.id ||
-            nome; // fallback: nome como identificador
+            getCampo(s, ['ID_SERVICO', 'idServico', 'ID', 'id'], ['id_serv']) ||
+            nome;
 
         const option = document.createElement('option');
         option.value = id;
@@ -384,22 +454,26 @@ function sugerirPrecoDoServico() {
     const campoValor = document.getElementById('atValor');
     if (!select || !campoValor) return;
 
-    const idServicoSelecionado = select.value;
-    if (!idServicoSelecionado) return;
+    const idSelecionado = select.value;
+    if (!idSelecionado) return;
 
-    const servico = cacheServicos.find(
-        s => (s.ID_SERVICO || s.idServico || s.ID || s.id || s.NOME_SERVICO || s.NOME || s.nomeServico || s.nome) == idServicoSelecionado
-    );
+    const servico = cacheServicos.find(s => {
+        const id = getCampo(s, ['ID_SERVICO', 'idServico', 'ID', 'id'], ['id_serv']);
+        const nome = extrairNomeServico(s);
+        return id == idSelecionado || nome == idSelecionado;
+    });
 
     if (servico) {
-        const preco = parseFloat(servico.PRECO_BASE || servico.precoBase || 0);
+        const preco = extrairPrecoServico(servico);
         if (!isNaN(preco) && preco > 0) {
             campoValor.value = preco.toFixed(2);
         }
     }
 }
 
-// 4. FUNÇÕES POST (ENVIAR DADOS)
+// =========================
+// 6. POST (CADASTROS)
+// =========================
 
 async function onSubmitCliente(event) {
     event.preventDefault();
@@ -494,7 +568,7 @@ async function onSubmitAtendimento(event) {
     const payload = {
         tipoRegistro: 'atendimento',
         data,                 // YYYY-MM-DD
-        idCliente,            // pode ser ID ou nome (fallback)
+        idCliente,
         nomeCliente,
         idServico,
         nomeServico,
@@ -510,10 +584,10 @@ async function onSubmitAtendimento(event) {
     });
 }
 
+// Envio genérico
 async function enviarDados(payload, msgSucesso, callbackSucesso) {
     const options = {
         method: 'POST',
-        // text/plain evita preflight complexo e funciona bem com Apps Script
         headers: {
             'Content-Type': 'text/plain;charset=utf-8'
         },
@@ -538,7 +612,9 @@ async function enviarDados(payload, msgSucesso, callbackSucesso) {
     }
 }
 
-// 5. UTILITÁRIOS
+// =========================
+// 7. UTILITÁRIOS
+// =========================
 
 function formatarMoeda(valor) {
     const numero = Number(valor);
