@@ -2,9 +2,9 @@
  * # Fluxograma resumido (front-end CRM financeiro):
  * # Entrada: usuário acessa página → JS carrega clientes, serviços, atendimentos e resumo do mês → usuário preenche formulários
  * # Validação: checar campos obrigatórios (nome, datas, valores, seleções) antes de enviar para a API
- * # Lógica: usar fetch(GET/POST) na URL do Apps Script → criar registros (cliente, serviço, atendimento) ou ler listas/resumos
+ * # Lógica: usar fetch (GET/POST) na URL do Apps Script → criar registros (cliente, serviço, atendimento) ou ler listas/resumos
  * # Saída: atualização das tabelas na tela e dos indicadores de resumo mensal, sempre refletindo o que está na planilha
- * # Versão 1.1 — 29/11/2025 / Mudança: ajuste do campo ATIVO e melhoria na mensagem de erro do POST
+ * # Versão 1.2 — 29/11/2025 / Mudança: correções em select de clientes/serviços, tabelas e integração com Apps Script
  */
 
 // 1. CONFIGURAÇÃO PRINCIPAL
@@ -15,29 +15,35 @@ let cacheClientes = [];
 let cacheServicos = [];
 let cacheAtendimentos = [];
 
-// Função utilitária para requisições
+// Função utilitária para requisições (lança erro em caso de falha)
 async function fetchJSON(url, options = {}) {
+    const response = await fetch(url, options);
+    if (!response.ok) {
+        throw new Error(`Erro HTTP: ${response.status}`);
+    }
+
+    const text = await response.text();
     try {
-        const response = await fetch(url, options);
-        if (!response.ok) {
-            throw new Error(`Erro HTTP: ${response.status}`);
-        }
-        return await response.json();
-    } catch (error) {
-        console.error('Erro na requisição:', error);
-        alert('Ocorreu um erro de comunicação com o servidor. Verifique o console.');
-        return { sucesso: false, erro: error.message };
+        return JSON.parse(text);
+    } catch (e) {
+        console.error('Resposta não é JSON válido:', text);
+        throw new Error('Resposta da API não está em JSON válido.');
     }
 }
 
 // Inicialização
 document.addEventListener('DOMContentLoaded', () => {
-    document.getElementById('formCliente').addEventListener('submit', onSubmitCliente);
-    document.getElementById('formServico').addEventListener('submit', onSubmitServico);
-    document.getElementById('formAtendimento').addEventListener('submit', onSubmitAtendimento);
+    const formCliente = document.getElementById('formCliente');
+    const formServico = document.getElementById('formServico');
+    const formAtendimento = document.getElementById('formAtendimento');
+    const mesResumo = document.getElementById('mesResumo');
+    const atServico = document.getElementById('atServico');
 
-    document.getElementById('mesResumo').addEventListener('change', carregarResumoMensal);
-    document.getElementById('atServico').addEventListener('change', sugerirPrecoDoServico);
+    if (formCliente) formCliente.addEventListener('submit', onSubmitCliente);
+    if (formServico) formServico.addEventListener('submit', onSubmitServico);
+    if (formAtendimento) formAtendimento.addEventListener('submit', onSubmitAtendimento);
+    if (mesResumo) mesResumo.addEventListener('change', carregarResumoMensal);
+    if (atServico) atServico.addEventListener('change', sugerirPrecoDoServico);
 
     inicializarMesResumo();
     carregarDadosIniciais();
@@ -47,91 +53,151 @@ function inicializarMesResumo() {
     const hoje = new Date();
     const ano = hoje.getFullYear();
     const mes = String(hoje.getMonth() + 1).padStart(2, '0');
-    document.getElementById('mesResumo').value = `${ano}-${mes}`;
+    const campo = document.getElementById('mesResumo');
+    if (campo) {
+        campo.value = `${ano}-${mes}`;
+    }
 }
 
 async function carregarDadosIniciais() {
-    await Promise.all([
-        carregarClientes(),
-        carregarServicos(),
-        carregarAtendimentos()
-    ]);
-    await carregarResumoMensal();
+    try {
+        await Promise.all([
+            carregarClientes(),
+            carregarServicos(),
+            carregarAtendimentos()
+        ]);
+        await carregarResumoMensal();
+    } catch (e) {
+        console.error('Erro ao carregar dados iniciais:', e);
+        alert('Erro ao carregar dados iniciais. Verifique o console.');
+    }
 }
 
 // 2. FUNÇÕES GET (CARREGAR DADOS)
 
 async function carregarClientes() {
     const url = `${URL_API}?action=listClientes`;
-    const data = await fetchJSON(url);
-    if (data.sucesso) {
+    try {
+        const data = await fetchJSON(url);
+        if (!data.sucesso) {
+            console.warn('Erro ao listar clientes:', data.mensagem || data.erro);
+            return;
+        }
         cacheClientes = data.clientes || [];
         preencherTabelaClientes();
         preencherSelectClientes();
+    } catch (e) {
+        console.error('Erro ao carregar clientes:', e);
+        alert('Erro ao carregar lista de clientes.');
     }
 }
 
 async function carregarServicos() {
     const url = `${URL_API}?action=listServicos`;
-    const data = await fetchJSON(url);
-    if (data.sucesso) {
+    try {
+        const data = await fetchJSON(url);
+        if (!data.sucesso) {
+            console.warn('Erro ao listar serviços:', data.mensagem || data.erro);
+            return;
+        }
         cacheServicos = data.servicos || [];
         preencherTabelaServicos();
         preencherSelectServicos();
+    } catch (e) {
+        console.error('Erro ao carregar serviços:', e);
+        alert('Erro ao carregar lista de serviços.');
     }
 }
 
 async function carregarAtendimentos() {
     const url = `${URL_API}?action=listAtendimentos`;
-    const data = await fetchJSON(url);
-    if (data.sucesso) {
+    try {
+        const data = await fetchJSON(url);
+        if (!data.sucesso) {
+            console.warn('Erro ao listar atendimentos:', data.mensagem || data.erro);
+            return;
+        }
         cacheAtendimentos = data.atendimentos || [];
         preencherTabelaAtendimentos();
+    } catch (e) {
+        console.error('Erro ao carregar atendimentos:', e);
+        alert('Erro ao carregar histórico de atendimentos.');
     }
 }
 
 async function carregarResumoMensal() {
-    const mes = document.getElementById('mesResumo').value; // YYYY-MM
-    if (!mes) return;
+    const campoMes = document.getElementById('mesResumo');
+    if (!campoMes || !campoMes.value) return;
 
+    const mes = campoMes.value; // YYYY-MM
     const url = `${URL_API}?action=resumoMensal&mes=${encodeURIComponent(mes)}`;
-    const data = await fetchJSON(url);
 
-    if (!data.sucesso) {
-        console.warn('Erro ao carregar resumo mensal:', data.mensagem || data.erro);
-        return;
+    try {
+        const data = await fetchJSON(url);
+        if (!data.sucesso) {
+            console.warn('Erro ao carregar resumo mensal:', data.mensagem || data.erro);
+            return;
+        }
+
+        const entradas = data.totalEntradas || 0;
+        const saidas = data.totalSaidas || 0;
+        const resultado = data.resultado || 0;
+
+        const elEntradas = document.getElementById('resumoEntradas');
+        const elSaidas = document.getElementById('resumoSaidas');
+        const elResultado = document.getElementById('resumoResultado');
+
+        if (elEntradas) elEntradas.innerText = formatarMoeda(entradas);
+        if (elSaidas) elSaidas.innerText = formatarMoeda(saidas);
+        if (elResultado) elResultado.innerText = formatarMoeda(resultado);
+    } catch (e) {
+        console.error('Erro ao carregar resumo mensal:', e);
+        alert('Erro ao carregar resumo financeiro do mês.');
     }
-
-    const entradas = data.totalEntradas || 0;
-    const saidas = data.totalSaidas || 0;
-    const resultado = data.resultado || 0;
-
-    document.getElementById('resumoEntradas').innerText = formatarMoeda(entradas);
-    document.getElementById('resumoSaidas').innerText = formatarMoeda(saidas);
-    document.getElementById('resumoResultado').innerText = formatarMoeda(resultado);
 }
 
 // 3. PREENCHIMENTO DE TABELAS E SELECTS
 
 function preencherTabelaClientes() {
     const tbody = document.getElementById('tabelaClientes');
+    if (!tbody) return;
+
     tbody.innerHTML = '';
 
-    cacheClientes.forEach(cliente => {
-        const tr = document.createElement('tr');
+    cacheClientes.forEach(c => {
+        const nome =
+            c.NOME ||
+            c.nome ||
+            c.Nome ||
+            c.CLIENTE ||
+            c.Cliente ||
+            '';
+        const telefone =
+            c.TELEFONE ||
+            c.telefone ||
+            c.Telefone ||
+            '';
+        const obs =
+            c.OBSERVACOES ||
+            c.OBS ||
+            c.observacoes ||
+            c.Obs ||
+            '';
+        const dataCadRaw =
+            c.DATA_CADASTRO ||
+            c.DATA_CAD ||
+            c.dataCadastro ||
+            c.DataCadastro ||
+            '';
+        const dataCad = formatarDataSimples(dataCadRaw);
 
-        const nome = cliente.NOME || cliente.nome || '';
-        const telefone = cliente.TELEFONE || cliente.telefone || '';
-        const obs = cliente.OBSERVACOES || cliente.OBS || cliente.observacoes || '';
-        const dataCad = formatarDataSimples(
-            cliente.DATA_CADASTRO || cliente.DATA_CAD || cliente.dataCadastro
-        );
+        const tr = document.createElement('tr');
+        const obsFinal = obs || dataCad;
 
         tr.innerHTML = `
             <td>${escapeHTML(nome)}</td>
             <td>${escapeHTML(telefone)}</td>
-            <td>${escapeHTML(obs)}</td>
-            <td>${dataCad}</td>
+            <td>${escapeHTML(obsFinal)}</td>
         `;
         tbody.appendChild(tr);
     });
@@ -139,13 +205,21 @@ function preencherTabelaClientes() {
 
 function preencherTabelaServicos() {
     const tbody = document.getElementById('tabelaServicos');
+    if (!tbody) return;
+
     tbody.innerHTML = '';
 
     cacheServicos.forEach(servico => {
-        const tr = document.createElement('tr');
-
-        const nome = servico.NOME_SERVICO || servico.NOME || servico.nomeServico || '';
-        const categoria = servico.CATEGORIA || servico.categoria || '';
+        const nome =
+            servico.NOME_SERVICO ||
+            servico.NOME ||
+            servico.nomeServico ||
+            servico.nome ||
+            '';
+        const categoria =
+            servico.CATEGORIA ||
+            servico.categoria ||
+            '';
         const preco = parseFloat(servico.PRECO_BASE || servico.precoBase || 0);
         const ativo = servico.ATIVO || servico.ativo;
 
@@ -160,6 +234,7 @@ function preencherTabelaServicos() {
             ativoTexto = 'Sim';
         }
 
+        const tr = document.createElement('tr');
         tr.innerHTML = `
             <td>${escapeHTML(nome)}</td>
             <td>${escapeHTML(categoria)}</td>
@@ -179,46 +254,53 @@ function preencherTabelaAtendimentos() {
     cacheAtendimentos.forEach(at => {
         const tr = document.createElement('tr');
 
-        // Data
         const data = formatarDataSimples(at.DATA || at.data);
 
-        // Campos que podem vir do backend
-        const idCliente   = at.ID_CLIENTE   || at.idCliente   || '';
-        const idServico   = at.ID_SERVICO   || at.idServico   || '';
-        const nomeCliRaw  = at.CLIENTE      || at.cliente     || '';
-        const nomeServRaw = at.SERVICO      || at.servico     || '';
+        const idCliente = at.ID_CLIENTE || at.idCliente || '';
+        const idServico = at.ID_SERVICO || at.idServico || '';
+        const nomeCliRaw = at.CLIENTE || at.cliente || at.nomeCliente || '';
+        const nomeServRaw = at.SERVICO || at.servico || at.nomeServico || '';
 
         const valor = parseFloat(at.VALOR_TOTAL || at.valorTotal || 0);
-        const pgto  = at.FORMA_PAGAMENTO || at.formaPagamento || '';
-        const obs   = at.OBSERVACOES     || at.OBS || at.observacoes || '';
+        const pgto = at.FORMA_PAGAMENTO || at.formaPagamento || '';
+        const obs = at.OBSERVACOES || at.OBS || at.observacoes || '';
 
-        // ============================
         // Resolver nome do cliente
-        // ============================
         let nomeCliente = 'Desconhecido';
-
         if (idCliente) {
-            const cli = cacheClientes.find(c => (c.ID_CLIENTE || c.idCliente) == idCliente);
+            const cli = cacheClientes.find(
+                c => (c.ID_CLIENTE || c.idCliente || c.ID || c.id) == idCliente
+            );
             if (cli) {
-                nomeCliente = cli.NOME || cli.nome || nomeCliRaw || 'Desconhecido';
+                nomeCliente =
+                    cli.NOME ||
+                    cli.nome ||
+                    cli.Nome ||
+                    cli.CLIENTE ||
+                    cli.Cliente ||
+                    nomeCliRaw ||
+                    'Desconhecido';
             } else if (nomeCliRaw) {
-                // Se não encontrou por ID, usa o nome que veio direto no atendimento
                 nomeCliente = nomeCliRaw;
             }
         } else if (nomeCliRaw) {
-            // Não veio ID, mas veio nome direto
             nomeCliente = nomeCliRaw;
         }
 
-        // ============================
         // Resolver nome do serviço
-        // ============================
         let nomeServico = 'Desconhecido';
-
         if (idServico) {
-            const serv = cacheServicos.find(s => (s.ID_SERVICO || s.idServico) == idServico);
+            const serv = cacheServicos.find(
+                s => (s.ID_SERVICO || s.idServico || s.ID || s.id) == idServico
+            );
             if (serv) {
-                nomeServico = serv.NOME_SERVICO || serv.NOME || serv.nomeServico || nomeServRaw || 'Desconhecido';
+                nomeServico =
+                    serv.NOME_SERVICO ||
+                    serv.NOME ||
+                    serv.nomeServico ||
+                    serv.nome ||
+                    nomeServRaw ||
+                    'Desconhecido';
             } else if (nomeServRaw) {
                 nomeServico = nomeServRaw;
             }
@@ -238,15 +320,57 @@ function preencherTabelaAtendimentos() {
     });
 }
 
+function preencherSelectClientes() {
+    const select = document.getElementById('atCliente');
+    if (!select) return;
+
+    select.innerHTML = '<option value="">Selecione um cliente...</option>';
+
+    cacheClientes.forEach((c) => {
+        const nome =
+            c.NOME ||
+            c.nome ||
+            c.Nome ||
+            c.CLIENTE ||
+            c.Cliente ||
+            '';
+        if (!nome) return;
+
+        const id =
+            c.ID_CLIENTE ||
+            c.idCliente ||
+            c.ID ||
+            c.id ||
+            nome; // fallback: usa o nome como "ID"
+
+        const option = document.createElement('option');
+        option.value = id;
+        option.textContent = nome;
+        select.appendChild(option);
+    });
+}
 
 function preencherSelectServicos() {
     const select = document.getElementById('atServico');
+    if (!select) return;
+
     select.innerHTML = '<option value="">Selecione um serviço...</option>';
 
-    cacheServicos.forEach(s => {
-        const id = s.ID_SERVICO || s.idServico;
-        const nome = s.NOME_SERVICO || s.NOME || s.nomeServico;
-        if (!id || !nome) return;
+    cacheServicos.forEach((s) => {
+        const nome =
+            s.NOME_SERVICO ||
+            s.NOME ||
+            s.nomeServico ||
+            s.nome ||
+            '';
+        if (!nome) return;
+
+        const id =
+            s.ID_SERVICO ||
+            s.idServico ||
+            s.ID ||
+            s.id ||
+            nome; // fallback: nome como identificador
 
         const option = document.createElement('option');
         option.value = id;
@@ -256,16 +380,21 @@ function preencherSelectServicos() {
 }
 
 function sugerirPrecoDoServico() {
-    const idServicoSelecionado = document.getElementById('atServico').value;
+    const select = document.getElementById('atServico');
+    const campoValor = document.getElementById('atValor');
+    if (!select || !campoValor) return;
+
+    const idServicoSelecionado = select.value;
     if (!idServicoSelecionado) return;
 
     const servico = cacheServicos.find(
-        s => (s.ID_SERVICO || s.idServico) == idServicoSelecionado
+        s => (s.ID_SERVICO || s.idServico || s.ID || s.id || s.NOME_SERVICO || s.NOME || s.nomeServico || s.nome) == idServicoSelecionado
     );
+
     if (servico) {
         const preco = parseFloat(servico.PRECO_BASE || servico.precoBase || 0);
-        if (preco > 0) {
-            document.getElementById('atValor').value = preco.toFixed(2);
+        if (!isNaN(preco) && preco > 0) {
+            campoValor.value = preco.toFixed(2);
         }
     }
 }
@@ -334,15 +463,22 @@ async function onSubmitServico(event) {
 async function onSubmitAtendimento(event) {
     event.preventDefault();
 
-    const data = document.getElementById('atData').value;
-    const idCliente = document.getElementById('atCliente').value;
-    const idServico = document.getElementById('atServico').value;
-    const valorStr = document.getElementById('atValor').value;
-    const formaPagamento = document.getElementById('atFormaPgto').value;
-    const obs = document.getElementById('atObs').value.trim();
+    const campoData = document.getElementById('atData');
+    const selectCliente = document.getElementById('atCliente');
+    const selectServico = document.getElementById('atServico');
+    const campoValor = document.getElementById('atValor');
+    const campoPgto = document.getElementById('atFormaPgto');
+    const campoObs = document.getElementById('atObs');
+
+    const data = campoData.value;
+    const idCliente = selectCliente.value;
+    const idServico = selectServico.value;
+    const valorStr = campoValor.value;
+    const formaPagamento = campoPgto.value;
+    const obs = campoObs.value.trim();
 
     if (!data || !idCliente || !idServico || !valorStr || !formaPagamento) {
-        alert('Preencha todos os campos obrigatórios.');
+        alert('Preencha todos os campos obrigatórios do atendimento.');
         return;
     }
 
@@ -352,11 +488,16 @@ async function onSubmitAtendimento(event) {
         return;
     }
 
+    const nomeCliente = selectCliente.options[selectCliente.selectedIndex]?.text || '';
+    const nomeServico = selectServico.options[selectServico.selectedIndex]?.text || '';
+
     const payload = {
         tipoRegistro: 'atendimento',
         data,                 // YYYY-MM-DD
-        idCliente,
+        idCliente,            // pode ser ID ou nome (fallback)
+        nomeCliente,
         idServico,
+        nomeServico,
         valorTotal,
         formaPagamento,
         observacoes: obs
@@ -372,7 +513,7 @@ async function onSubmitAtendimento(event) {
 async function enviarDados(payload, msgSucesso, callbackSucesso) {
     const options = {
         method: 'POST',
-        // IMPORTANTE: usar text/plain para ser um "simple request" e não ter preflight OPTIONS
+        // text/plain evita preflight complexo e funciona bem com Apps Script
         headers: {
             'Content-Type': 'text/plain;charset=utf-8'
         },
@@ -381,21 +522,21 @@ async function enviarDados(payload, msgSucesso, callbackSucesso) {
 
     try {
         const data = await fetchJSON(URL_API, options);
+
         if (data && data.sucesso) {
             alert(msgSucesso);
             if (callbackSucesso) callbackSucesso();
         } else {
             alert(
                 'Erro ao salvar: ' +
-                (data.mensagem || data.erro || 'Resposta desconhecida da API')
+                (data?.mensagem || data?.erro || 'Resposta desconhecida da API')
             );
         }
     } catch (e) {
-        console.error(e);
-        alert('Erro na comunicação. Verifique se a API permite acesso.');
+        console.error('Erro no envio de dados:', e);
+        alert('Erro na comunicação com o servidor. Veja o console para detalhes.');
     }
 }
-
 
 // 5. UTILITÁRIOS
 
@@ -421,5 +562,3 @@ function escapeHTML(texto) {
         .replace(/"/g, "&quot;")
         .replace(/'/g, "&#039;");
 }
-
-
