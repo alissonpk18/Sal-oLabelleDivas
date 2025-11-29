@@ -542,3 +542,111 @@ async function handleSubmitDespesa(e) {
     alert('Erro ao salvar despesa. Verifique o console.');
   }
 }
+// Fluxograma resumido (script.js):
+// Entrada → usuário abre página e tenta logar
+// Validação → loginUsuario/loginSenha (dagmar ou cadastro + 1234)
+// Lógica → define papel (admin ou cadastro), esconde tela de login e mostra app
+// Saída → app inicializado com permissões do papel
+// Versão 1.5 — 29/11/2025 / Mudança: inclusão de login simples e controle de permissões
+
+let papelAtual = null; // 'admin' ou 'cadastro'
+
+document.addEventListener('DOMContentLoaded', () => {
+  inicializarLogin();
+});
+
+function inicializarLogin() {
+  const loginWrapper = document.getElementById('loginWrapper');
+  const appMain      = document.getElementById('appMain');
+  const loginForm    = document.getElementById('loginForm');
+  const inputUsuario = document.getElementById('loginUsuario');
+  const inputSenha   = document.getElementById('loginSenha');
+  const divErro      = document.getElementById('loginErro');
+
+  if (!loginWrapper || !appMain || !loginForm) {
+    console.warn('Elementos de login não encontrados. Iniciando app direto.');
+    inicializarApp(); // usa o que você já tinha para iniciar o app
+    return;
+  }
+
+  loginForm.addEventListener('submit', (e) => {
+    e.preventDefault();
+
+    const usuario = (inputUsuario.value || '').trim().toLowerCase();
+    const senha   = (inputSenha.value || '').trim();
+
+    if (divErro) divErro.classList.add('d-none');
+
+    if (!usuario || !senha) {
+      if (divErro) {
+        divErro.textContent = 'Informe usuário e senha.';
+        divErro.classList.remove('d-none');
+      } else {
+        alert('Informe usuário e senha.');
+      }
+      return;
+    }
+
+    if (senha !== '1234') {
+      if (divErro) {
+        divErro.textContent = 'Senha incorreta.';
+        divErro.classList.remove('d-none');
+      } else {
+        alert('Senha incorreta.');
+      }
+      inputSenha.focus();
+      return;
+    }
+
+    if (usuario === 'dagmar') {
+      papelAtual = 'admin';
+    } else if (usuario === 'cadastro') {
+      papelAtual = 'cadastro';
+    } else {
+      if (divErro) {
+        divErro.textContent = 'Usuário inválido. Use "dagmar" ou "cadastro".';
+        divErro.classList.remove('d-none');
+      } else {
+        alert('Usuário inválido. Use "dagmar" ou "cadastro".');
+      }
+      inputUsuario.focus();
+      return;
+    }
+
+    // Login OK → mostra app
+    loginWrapper.classList.add('d-none');
+    appMain.classList.remove('d-none');
+
+    aplicarPermissoesPorPapel(papelAtual);
+    inicializarApp(); // aqui você chama a função que já carrega clientes, serviços etc.
+  });
+}
+
+function aplicarPermissoesPorPapel(papel) {
+  if (papel !== 'cadastro') {
+    // admin vê tudo
+    return;
+  }
+
+  const alvosAdminTargets = [
+    '#secNovoCliente',
+    '#secNovoServico',
+    '#secNovaDespesa',
+    '#secListaClientes',
+    '#secListaServicos',
+    '#secListaDespesas',
+    '#secHistorico'
+  ];
+
+  alvosAdminTargets.forEach((target) => {
+    // botões que abrem os collapses
+    document
+      .querySelectorAll(`[data-bs-target="${target}"]`)
+      .forEach((btn) => btn.classList.add('d-none'));
+
+    // própria seção
+    const sec = document.querySelector(target);
+    if (sec) sec.classList.add('d-none');
+  });
+}
+
