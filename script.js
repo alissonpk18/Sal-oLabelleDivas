@@ -11,8 +11,9 @@
 // CONFIGURAÇÃO BÁSICA DA API
 // =============================
 
-// URL do WebApp publicado do Apps Script
+// URL do WebApp publicado do Apps Script (App da Web)
 const API_URL = 'https://script.google.com/macros/s/AKfycbyycqZj4CsjV3RHtBtPdiiaLOYUS8EiwZUKc47RZPkdLnTN74_Zgkhq9udTo1n6j_pvdA/exec';
+
 
 
 const LOGIN_USERS = {
@@ -497,6 +498,7 @@ async function atualizarResumoFinanceiro() {
 document.addEventListener('DOMContentLoaded', () => {
   configurarLogin();
 });
+
 
 
 
