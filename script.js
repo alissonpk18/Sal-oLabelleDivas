@@ -18,13 +18,115 @@ const API_URL = 'https://script.google.com/macros/s/AKfycbyycqZj4CsjV3RHtBtPdiia
 // CONTROLE DE LOGIN SIMPLES
 // =============================
 
+// usuários permitidos
 const LOGIN_USERS = {
   dagmar:   { role: 'admin' },
   cadastro: { role: 'cadastro' }
 };
 
+// senha fixa
 const LOGIN_SENHA = '1234';
-let currentRole   = null;  // papel do usuário logado
+
+// papel do usuário logado
+let currentRole = null;
+
+// =============================
+// LOGIN E CONTROLE DE INTERFACE
+// =============================
+
+function aplicarRoleNaInterface() {
+  // admin: vê tudo
+  // cadastro: vê apenas o formulário de atendimento
+  const isCadastro = currentRole === 'cadastro';
+
+  const elementosRestritos = [
+    document.querySelector('section.mb-3'), // botões Novo Cliente / Novo Serviço / Despesa
+    document.getElementById('secNovoCliente'),
+    document.getElementById('secNovoServico'),
+    document.getElementById('secNovaDespesa'),
+    document.getElementById('secListaClientes'),
+    document.getElementById('secListaServicos'),
+    document.getElementById('secListaDespesas'),
+    document.getElementById('secHistorico')
+  ];
+
+  elementosRestritos.forEach(el => {
+    if (!el) return;
+    if (isCadastro) {
+      el.classList.add('d-none');
+    } else {
+      el.classList.remove('d-none');
+    }
+  });
+}
+
+async function posLoginCarregarApp() {
+  try {
+    console.log('[LOGIN] Pós-login: carregando dados e eventos...');
+    await carregarDadosIniciais();
+    inicializarEventosFormularios();
+    inicializarResumoFinanceiro();
+    console.log('[LOGIN] Pós-login concluído.');
+  } catch (err) {
+    console.error('[ERRO] ao carregar dados iniciais após login:', err);
+    alert('Erro ao carregar dados iniciais. Verifique o console.');
+  }
+}
+
+function configurarLogin() {
+  const loginForm    = document.getElementById('loginForm');
+  const loginUser    = document.getElementById('loginUsuario');
+  const loginSenha   = document.getElementById('loginSenha');
+  const loginErro    = document.getElementById('loginErro');
+  const loginWrapper = document.getElementById('loginWrapper');
+  const appMain      = document.getElementById('appMain');
+
+  if (!loginForm || !loginUser || !loginSenha || !loginWrapper || !appMain) {
+    console.error('[ERRO] Elementos de login não encontrados no HTML.');
+    return;
+  }
+
+  console.log('[INFO] Login configurado.');
+
+  loginForm.addEventListener('submit', (ev) => {
+    ev.preventDefault();
+
+    const usuarioDigitado = (loginUser.value || '').trim().toLowerCase();
+    const senhaDigitada   = (loginSenha.value || '').trim();
+
+    console.log('[LOGIN] Tentativa:', usuarioDigitado);
+
+    const userCfg = LOGIN_USERS[usuarioDigitado];
+
+    if (!userCfg || senhaDigitada !== LOGIN_SENHA) {
+      console.warn('[LOGIN] Credenciais inválidas.');
+      loginErro.classList.remove('d-none');
+      return;
+    }
+
+    // credenciais ok
+    loginErro.classList.add('d-none');
+    currentRole = userCfg.role;
+    console.log('[LOGIN] Sucesso. Role:', currentRole);
+
+    // esconde login, mostra app
+    loginWrapper.classList.add('d-none');
+    appMain.classList.remove('d-none');
+
+    aplicarRoleNaInterface();
+    posLoginCarregarApp(); // chama async, mas não precisa do await aqui
+  });
+}
+
+// =============================
+// INICIALIZAÇÃO GERAL
+// =============================
+
+document.addEventListener('DOMContentLoaded', () => {
+  console.log('[INFO] DOM carregado, configurando login...');
+  configurarLogin();
+});
+
 
 // =============================
 // FUNÇÕES AUXILIARES
@@ -527,3 +629,4 @@ document.addEventListener('DOMContentLoaded', () => {
   console.log('[INFO] DOM carregado, iniciando configuração de login...');
   configurarLogin();
 });
+
