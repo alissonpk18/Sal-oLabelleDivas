@@ -1,11 +1,17 @@
-/* style.css */
+/* 
+ * Fluxograma resumido (CSS CRM Financeiro):
+ * Entrada → página carrega Bootstrap + style.css
+ * Validação → aplicação de temas, cores e sombras nos componentes
+ * Lógica → estilizar header, cards, botões, formulários, tabelas e ícones
+ * Saída → interface visual consistente para clientes, serviços, atendimentos e despesas
+ * Versão 1.4 — 29/11/2025 / Mudança: ajustes para módulos colapsáveis e ícones de despesas
+ */
+
 @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700&display=swap');
 
 :root {
-    --primary-blue: #0d47a1;
-    /* Azul Forte */
-    --primary-pink: #d81b60;
-    /* Rosa Forte */
+    --primary-blue: #0d47a1;      /* Azul Forte */
+    --primary-pink: #d81b60;      /* Rosa Forte */
     --accent-pink: #f48fb1;
     --light-bg: #f8f9fa;
     --text-dark: #333;
@@ -72,7 +78,7 @@ header p {
     color: var(--primary-pink);
 }
 
-/* Buttons */
+/* Buttons principais */
 .btn-primary-custom {
     background: var(--primary-blue);
     border: none;
@@ -82,8 +88,7 @@ header p {
 }
 
 .btn-primary-custom:hover {
-    background: #0a367a;
-    /* Darker blue */
+    background: #0a367a; /* Darker blue */
     transform: scale(1.02);
 }
 
@@ -97,10 +102,18 @@ header p {
 }
 
 .btn-pink-custom:hover {
-    background: #ad1457;
-    /* Darker pink */
+    background: #ad1457; /* Darker pink */
     color: white;
     transform: scale(1.02);
+}
+
+/* Botões outline usados nos toggles (cadastros/listas) */
+.btn-outline-primary,
+.btn-outline-danger,
+.btn-outline-dark,
+.btn-outline-secondary {
+    border-radius: 999px;
+    font-weight: 500;
 }
 
 /* Form Controls */
@@ -137,8 +150,7 @@ header p {
 }
 
 .table-hover tbody tr:hover {
-    background-color: rgba(216, 27, 96, 0.05);
-    /* Light pink hover */
+    background-color: rgba(216, 27, 96, 0.05); /* Light pink hover */
 }
 
 /* Footer */
@@ -157,4 +169,16 @@ footer {
 
 .bi-cash-coin {
     color: #28a745;
+}
+
+/* Ícone de carteira (despesas) */
+.bi-wallet2 {
+    color: #343a40;
+}
+
+/* Pequeno ajuste em badges de cabeçalho das listas */
+.card-header .badge {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
 }
