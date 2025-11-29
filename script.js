@@ -11,12 +11,9 @@
 // CONFIGURAÇÃO BÁSICA DA API
 // =============================
 
-// ATENÇÃO: coloque aqui a URL do seu WebApp publicado do Apps Script
-const 'API_URL = https://script.google.com/macros/s/AKfycbyycqZj4CsjV3RHtBtPdiiaLOYUS8EiwZUKc47RZPkdLnTN74_Zgkhq9udTo1n6j_pvdA/exec'; // ex: 'https://script.google.com/macros/s/AKfycbx.../exec'
+// URL do WebApp publicado do Apps Script
+const API_URL = 'https://script.google.com/macros/s/AKfycbyycqZj4CsjV3RHtBtPdiiaLOYUS8EiwZUKc47RZPkdLnTN74_Zgkhq9udTo1n6j_pvdA/exec';
 
-// =============================
-// CONTROLE DE LOGIN SIMPLES
-// =============================
 
 const LOGIN_USERS = {
   dagmar: { role: 'admin' },
@@ -500,5 +497,6 @@ async function atualizarResumoFinanceiro() {
 document.addEventListener('DOMContentLoaded', () => {
   configurarLogin();
 });
+
 
 
