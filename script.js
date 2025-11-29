@@ -4,7 +4,8 @@
  * # Validação: checar campos obrigatórios (nome, datas, valores, seleções) antes de enviar para a API
  * # Lógica: usar fetch (GET/POST) na URL do Apps Script → criar registros (cliente, serviço, atendimento) ou ler listas/resumos
  * # Saída: atualização das tabelas na tela e dos indicadores de resumo mensal, sempre refletindo o que está na planilha
- * # Versão 1.3 — 29/11/2025 / Mudança: detecção genérica de campos (Nome/Cliente) p/ popular select e tabela
+  * # Versão 1.4 — 29/11/2025 / Mudança: resumo mensal calculado no front-end com base nos atendimentos (somente entradas)
+
  */
 
 // 1. CONFIGURAÇÃO PRINCIPAL
@@ -276,36 +277,59 @@ async function carregarAtendimentos() {
     }
 }
 
-async function carregarResumoMensal() {
+function carregarResumoMensal() {
     const campoMes = document.getElementById('mesResumo');
     if (!campoMes || !campoMes.value) return;
 
-    const mes = campoMes.value; // YYYY-MM
-    const url = `${URL_API}?action=resumoMensal&mes=${encodeURIComponent(mes)}`;
+    // mesSelecionado = "YYYY-MM"
+    const [anoStr, mesStr] = campoMes.value.split('-');
+    const anoSel = parseInt(anoStr, 10);
+    const mesSel = parseInt(mesStr, 10); // 1–12
 
-    try {
-        const data = await fetchJSON(url);
-        if (!data.sucesso) {
-            console.warn('Erro ao carregar resumo mensal:', data.mensagem || data.erro);
-            return;
+    let totalEntradas = 0;
+
+    // Usa somente os atendimentos já carregados em cacheAtendimentos
+    cacheAtendimentos.forEach(at => {
+        const rawData =
+            at.DATA ||
+            at.data;
+
+        if (!rawData) return;
+
+        const d = new Date(rawData);
+        if (isNaN(d.getTime())) return;
+
+        const ano = d.getFullYear();
+        const mes = d.getMonth() + 1; // 0-based → 1–12
+
+        if (ano === anoSel && mes === mesSel) {
+            const v = parseFloat(
+                at.VALOR_TOTAL ||
+                at.valorTotal ||
+                at.VALOR ||
+                at.valor ||
+                0
+            );
+            if (!isNaN(v)) {
+                totalEntradas += v;
+            }
         }
+    });
 
-        const entradas = data.totalEntradas || 0;
-        const saidas = data.totalSaidas || 0;
-        const resultado = data.resultado || 0;
+    // Ainda não há módulo de despesas → saídas = 0
+    const totalSaidas = 0;
+    const resultado = totalEntradas - totalSaidas;
 
-        const elEntradas = document.getElementById('resumoEntradas');
-        const elSaidas = document.getElementById('resumoSaidas');
-        const elResultado = document.getElementById('resumoResultado');
+    const elEntradas = document.getElementById('resumoEntradas');
+    const elSaidas = document.getElementById('resumoSaidas');
+    const elResultado = document.getElementById('resumoResultado');
 
-        if (elEntradas) elEntradas.innerText = formatarMoeda(entradas);
-        if (elSaidas) elSaidas.innerText = formatarMoeda(saidas);
-        if (elResultado) elResultado.innerText = formatarMoeda(resultado);
-    } catch (e) {
-        console.error('Erro ao carregar resumo mensal:', e);
-        alert('Erro ao carregar resumo financeiro do mês.');
-    }
+    if (elEntradas) elEntradas.innerText = formatarMoeda(totalEntradas);
+    if (elSaidas) elSaidas.innerText = formatarMoeda(totalSaidas);
+    if (elResultado) elResultado.innerText = formatarMoeda(resultado);
 }
+
+
 
 // =========================
 // 5. TABELAS E SELECTS
@@ -662,4 +686,5 @@ function escapeHTML(texto) {
         .replace(/"/g, "&quot;")
         .replace(/'/g, "&#039;");
 }
+
 
