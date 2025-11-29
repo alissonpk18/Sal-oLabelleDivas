@@ -366,35 +366,59 @@ function preencherTabelaAtendimentos() {
     cacheAtendimentos.forEach(at => {
         const tr = document.createElement('tr');
 
+        // Data
         const data = formatarDataSimples(at.DATA || at.data);
 
-        const idCliente = extrairIdAtendimentoCliente(at);
-        const nomeCliRaw = extrairNomeAtendimentoCliente(at);
-        const idServico = extrairIdAtendimentoServico(at);
-        const nomeServRaw = extrairNomeAtendimentoServico(at);
+        // ID / nome que vêm da API
+        const idClienteBruto  = at.ID_CLIENTE || at.idCliente || at.CLIENTE || at.cliente || '';
+        const idServicoBruto  = at.ID_SERVICO || at.idServico || at.SERVICO || at.servico || '';
 
         const valor = parseFloat(at.VALOR_TOTAL || at.valorTotal || 0);
-        const pgto = at.FORMA_PAGAMENTO || at.formaPagamento || '';
-        const obs = at.OBSERVACOES || at.OBS || at.observacoes || '';
+        const pgto  = at.FORMA_PAGAMENTO || at.formaPagamento || '';
+        const obs   = at.OBSERVACOES || at.OBS || at.observacoes || '';
 
-        // Cliente: tenta achar no cache pelo ID; se não tiver, usa nome do próprio atendimento
+        // ==============================
+        // Resolver NOME do cliente
+        // ==============================
         let nomeCliente = 'Desconhecido';
-        if (idCliente) {
-            const cli = cacheClientes.find(c => (extrairIdCliente(c) || extrairNomeCliente(c)) == idCliente);
-            if (cli) nomeCliente = extrairNomeCliente(cli) || nomeCliRaw || 'Desconhecido';
-            else if (nomeCliRaw) nomeCliente = nomeCliRaw;
-        } else if (nomeCliRaw) {
-            nomeCliente = nomeCliRaw;
+
+        if (idClienteBruto) {
+            // 1) tenta achar na lista de clientes pelo ID
+            const cli = cacheClientes.find(c =>
+                (c.ID_CLIENTE || c.idCliente) == idClienteBruto
+            );
+
+            if (cli) {
+                nomeCliente = cli.NOME || cli.nome || 'Desconhecido';
+            } else {
+                // 2) se não achou e o valor NÃO parece um ID (não começa com C_), usa o próprio valor como nome
+                if (!String(idClienteBruto).startsWith('C_')) {
+                    nomeCliente = idClienteBruto;
+                }
+            }
         }
 
-        // Serviço
+        // ==============================
+        // Resolver NOME do serviço
+        // ==============================
         let nomeServico = 'Desconhecido';
-        if (idServico) {
-            const serv = cacheServicos.find(s => (extrairIdCliente(s) || extrairNomeServico(s)) == idServico); // reuso helper id genérico
-            if (serv) nomeServico = extrairNomeServico(serv) || nomeServRaw || 'Desconhecido';
-            else if (nomeServRaw) nomeServico = nomeServRaw;
-        } else if (nomeServRaw) {
-            nomeServico = nomeServRaw;
+
+        if (idServicoBruto) {
+            const serv = cacheServicos.find(s =>
+                (s.ID_SERVICO || s.idServico) == idServicoBruto
+            );
+
+            if (serv) {
+                nomeServico =
+                    serv.NOME_SERVICO ||
+                    serv.NOME ||
+                    serv.nomeServico ||
+                    serv.nome ||
+                    'Desconhecido';
+            } else {
+                // Se backend já mandar o nome no campo SERVICO, usa ele
+                nomeServico = at.SERVICO || at.servico || nomeServico;
+            }
         }
 
         tr.innerHTML = `
@@ -638,3 +662,4 @@ function escapeHTML(texto) {
         .replace(/"/g, "&quot;")
         .replace(/'/g, "&#039;");
 }
+
