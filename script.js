@@ -4,7 +4,7 @@
  * Validação → login simples (usuário/senha) + validação básica de formulários
  * Lógica → chamadas à API (GET/POST) para CLIENTES, SERVICOS, ATENDIMENTOS, DESPESAS e RESUMO MENSAL
  * Saída → atualização dos selects, tabelas e cards de resumo financeiro
- * Versão 1.5 — 29/11/2025 / Mudança: login simples + integração com resumoMensal + carregamento inicial após login
+ * Versão 1.6 — 29/11/2025 / Mudança: correção API_URL, tratamento de datas ISO, logs de debug e ajustes de login
  */
 
 // =============================
@@ -19,11 +19,12 @@ const API_URL = 'https://script.google.com/macros/s/AKfycbyycqZj4CsjV3RHtBtPdiia
 // =============================
 
 const LOGIN_USERS = {
-  dagmar: { role: 'admin' },
+  dagmar:   { role: 'admin' },
   cadastro: { role: 'cadastro' }
 };
 
 const LOGIN_SENHA = '1234';
+let currentRole   = null;  // papel do usuário logado
 
 // =============================
 // FUNÇÕES AUXILIARES
@@ -34,10 +35,23 @@ function formatarMoeda(valor) {
   return n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 }
 
+/**
+ * Aceita Date ou string ISO (ex.: "2025-11-29T15:16:17.000Z")
+ */
 function formatarData(valor) {
   if (!valor) return '';
-  const d = new Date(valor);
-  if (isNaN(d.getTime())) return valor;
+
+  let d;
+  if (valor instanceof Date) {
+    d = valor;
+  } else {
+    d = new Date(valor);
+  }
+
+  if (isNaN(d.getTime())) {
+    return valor; // devolve como veio, se não conseguir converter
+  }
+
   const dia = String(d.getDate()).padStart(2, '0');
   const mes = String(d.getMonth() + 1).padStart(2, '0');
   const ano = d.getFullYear();
@@ -53,12 +67,16 @@ async function apiGet(action, params = {}) {
     }
   });
 
+  console.log('[apiGet] URL:', url.toString());
+
   const resp = await fetch(url.toString());
   if (!resp.ok) {
     throw new Error(`HTTP ${resp.status} - ${resp.statusText}`);
   }
 
   const data = await resp.json();
+  console.log('[apiGet] resposta:', data);
+
   if (!data.sucesso) {
     throw new Error(data.mensagem || 'Erro retornado pela API.');
   }
@@ -66,11 +84,11 @@ async function apiGet(action, params = {}) {
 }
 
 async function apiPost(tipoRegistro, payload) {
+  console.log('[apiPost] tipoRegistro:', tipoRegistro, 'payload:', payload);
+
   const resp = await fetch(API_URL, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json'
-    },
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       tipoRegistro,
       ...payload
@@ -82,6 +100,8 @@ async function apiPost(tipoRegistro, payload) {
   }
 
   const data = await resp.json();
+  console.log('[apiPost] resposta:', data);
+
   if (!data.sucesso) {
     throw new Error(data.mensagem || 'Erro retornado pela API.');
   }
@@ -92,19 +112,18 @@ async function apiPost(tipoRegistro, payload) {
 // CACHE EM MEMÓRIA
 // =============================
 
-let cacheClientes = [];
-let cacheServicos = [];
+let cacheClientes     = [];
+let cacheServicos     = [];
 let cacheAtendimentos = [];
-let cacheDespesas = [];
+let cacheDespesas     = [];
 
 // =============================
 // LOGIN E CONTROLE DE INTERFACE
 // =============================
 
 function aplicarRoleNaInterface() {
-  // Por enquanto:
-  //  - admin: vê tudo
-  //  - cadastro: vê apenas o formulário de atendimento
+  // admin: vê tudo
+  // cadastro: vê apenas o formulário de atendimento
   const isCadastro = currentRole === 'cadastro';
 
   const elementosRestritos = [
@@ -129,10 +148,10 @@ function aplicarRoleNaInterface() {
 }
 
 function configurarLogin() {
-  const loginForm   = document.getElementById('loginForm');
-  const loginUser   = document.getElementById('loginUsuario');
-  const loginSenha  = document.getElementById('loginSenha');
-  const loginErro   = document.getElementById('loginErro');
+  const loginForm    = document.getElementById('loginForm');
+  const loginUser    = document.getElementById('loginUsuario');
+  const loginSenha   = document.getElementById('loginSenha');
+  const loginErro    = document.getElementById('loginErro');
   const loginWrapper = document.getElementById('loginWrapper');
   const appMain      = document.getElementById('appMain');
 
@@ -141,15 +160,20 @@ function configurarLogin() {
     return;
   }
 
+  console.log('[INFO] Login configurado.');
+
   loginForm.addEventListener('submit', async (ev) => {
     ev.preventDefault();
 
     const usuario = (loginUser.value || '').trim().toLowerCase();
     const senha   = (loginSenha.value || '').trim();
 
+    console.log('[LOGIN] Tentativa de login:', usuario);
+
     const userCfg = LOGIN_USERS[usuario];
 
     if (!userCfg || senha !== LOGIN_SENHA) {
+      console.warn('[LOGIN] Falha de credenciais.');
       loginErro.classList.remove('d-none');
       return;
     }
@@ -181,32 +205,38 @@ function configurarLogin() {
 
 async function carregarDadosIniciais() {
   console.log('[INFO] Carregando dados iniciais...');
-const [
-  dadosClientes,
-  dadosServicos,
-  dadosAtend,
-  dadosDespesas
-] = await Promise.all([
-  apiGet('listClientes'),
-  apiGet('listServicos'),
-  apiGet('listAtendimentos'),
-  apiGet('listDespesas')
-]);
 
-  cacheClientes     = dadosClientes.clientes     || [];
-  cacheServicos     = dadosServicos.servicos     || [];
-  cacheAtendimentos = dadosAtend.atendimentos    || [];
-  cacheDespesas     = dadosDespesas.despesas     || [];
+  try {
+    const [
+      dadosClientes,
+      dadosServicos,
+      dadosAtend,
+      dadosDespesas
+    ] = await Promise.all([
+      apiGet('listClientes'),
+      apiGet('listServicos'),
+      apiGet('listAtendimentos'),
+      apiGet('listDespesas')
+    ]);
 
-  preencherSelectClientes();
-  preencherSelectServicos();
+    cacheClientes     = dadosClientes.clientes  || [];
+    cacheServicos     = dadosServicos.servicos  || [];
+    cacheAtendimentos = dadosAtend.atendimentos || [];
+    cacheDespesas     = dadosDespesas.despesas  || [];
 
-  renderTabelaClientes();
-  renderTabelaServicos();
-  renderTabelaAtendimentos();
-  renderTabelaDespesas();
+    preencherSelectClientes();
+    preencherSelectServicos();
 
-  console.log('[INFO] Dados iniciais carregados.');
+    renderTabelaClientes();
+    renderTabelaServicos();
+    renderTabelaAtendimentos();
+    renderTabelaDespesas();
+
+    console.log('[INFO] Dados iniciais carregados.');
+  } catch (err) {
+    console.error('[ERRO] carregarDadosIniciais:', err);
+    throw err; // deixa o configurador de login mostrar o alerta
+  }
 }
 
 // =============================
@@ -236,7 +266,7 @@ function preencherSelectServicos() {
   cacheServicos.forEach(s => {
     const opt = document.createElement('option');
     opt.value = s.ID_SERVICO || s.ID || '';
-    const nome = s.NOME_SERVICO || s.NOME || '';
+    const nome  = s.NOME_SERVICO || s.NOME || '';
     const preco = s.PRECO_BASE != null ? ` - ${formatarMoeda(s.PRECO_BASE)}` : '';
     opt.textContent = nome + preco;
     sel.appendChild(opt);
@@ -494,10 +524,6 @@ async function atualizarResumoFinanceiro() {
 // =============================
 
 document.addEventListener('DOMContentLoaded', () => {
+  console.log('[INFO] DOM carregado, iniciando configuração de login...');
   configurarLogin();
 });
-
-
-
-
-
