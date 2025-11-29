@@ -1,421 +1,544 @@
+// =======================================================
+// Fluxograma resumido (script.js CRM Financeiro + Login)
+// Entrada:
+//   - Login simples (usuário/senha em memória)
+//   - Requisições HTTP GET/POST para o Apps Script (API_URL)
+// Validação:
+//   - Login: usuário = dagmar|cadastro e senha = 1234
+//   - Forms: campos obrigatórios antes de enviar
+// Lógica:
+//   - Carregar combos/listas (clientes, serviços, atendimentos, despesas)
+//   - Registrar novos clientes, serviços, atendimentos e despesas
+//   - Calcular resumo mensal (entradas, saídas, resultado)
+// Saída:
+//   - Interface atualizada (tabelas, selects, resumo financeiro)
+//   - Alertas simples de sucesso/erro
+// Versão 1.5 — 29/11/2025 / Mudança: inclusão de login (dagmar/cadastro)
+//   e controle de visibilidade por perfil.
+// =======================================================
+
+// =======================================================
+// CONFIGURAÇÃO DA API
+// =======================================================
+
+// SUBSTITUA AQUÍ PELO URL DO SEU WEBAPP DO APPS SCRIPT:
+const API_URL = 'https://script.google.com/macros/s/SEU_WEBAPP_AQUI/exec';
+
+// Cache em memória
+let cacheClientes = [];
+let cacheServicos = [];
+let cacheAtendimentos = [];
+let cacheDespesas = [];
+let mapaClientes = {}; // ID -> Nome
+let mapaServicos = {}; // ID -> Nome
+let papelAtual = null; // 'admin' ou 'cadastro'
+
+// =======================================================
+// INICIALIZAÇÃO GERAL
+// =======================================================
+
+document.addEventListener('DOMContentLoaded', () => {
+  inicializarLogin();
+});
+
+// =======================================================
+// LOGIN SIMPLES (HTML precisa ter:
+//   - div #loginWrapper
+//   - form #loginForm
+//   - input #loginUsuario
+//   - input #loginSenha
+//   - div #appMain (conteúdo principal, começa com d-none)
+// =======================================================
+
+function inicializarLogin() {
+  const loginWrapper = document.getElementById('loginWrapper');
+  const appMain = document.getElementById('appMain');
+  const loginForm = document.getElementById('loginForm');
+  const inputUsuario = document.getElementById('loginUsuario');
+  const inputSenha = document.getElementById('loginSenha');
+
+  if (!loginForm || !loginWrapper || !appMain) {
+    console.warn('Elementos de login não encontrados. Iniciando app direto.');
+    inicializarApp(); // fallback
+    return;
+  }
+
+  loginForm.addEventListener('submit', (e) => {
+    e.preventDefault();
+
+    const usuario = (inputUsuario.value || '').trim().toLowerCase();
+    const senha = (inputSenha.value || '').trim();
+
+    if (!usuario || !senha) {
+      alert('Informe usuário e senha.');
+      return;
+    }
+
+    if (senha !== '1234') {
+      alert('Senha incorreta.');
+      inputSenha.focus();
+      return;
+    }
+
+    if (usuario === 'dagmar') {
+      papelAtual = 'admin';
+    } else if (usuario === 'cadastro') {
+      papelAtual = 'cadastro';
+    } else {
+      alert('Usuário inválido. Use "dagmar" ou "cadastro".');
+      inputUsuario.focus();
+      return;
+    }
+
+    // Esconde login e mostra app
+    loginWrapper.classList.add('d-none');
+    appMain.classList.remove('d-none');
+
+    aplicarPermissoesPorPapel(papelAtual);
+    inicializarApp();
+  });
+}
+
 /**
- * Fluxograma resumido (Apps Script CRM Financeiro):
- * Entrada → requisições HTTP GET/POST do site (GitHub Pages)
- * Validação → checar parâmetro "action" (GET) ou "tipoRegistro" (POST)
- * Lógica → ler/escrever nas abas CLIENTES, SERVICOS, ATENDIMENTOS, DESPESAS e calcular resumoMensal
- * Saída → JSON com {sucesso, mensagem, ...dados}
- * Versão 1.5 — 29/11/2025 / Mudança: inclusão de resumoMensal + fallback para abrir planilha por nome
+ * Esconde/mostra seções e botões de acordo com o papel
+ * - admin: vê tudo
+ * - cadastro: vê apenas Registrar Atendimento + Resumo
  */
-
-// =========================
-// CONFIGURAÇÃO BÁSICA
-// =========================
-const NOME_PLANILHA     = 'CRM_Financeiro_Salao';  // ajuste para o nome exato da planilha
-const ABA_CLIENTES      = 'CLIENTES';
-const ABA_SERVICOS      = 'SERVICOS';
-const ABA_ATENDIMENTOS  = 'ATENDIMENTOS';
-const ABA_DESPESAS      = 'DESPESAS';
-
-// =========================
-// FUNÇÕES DE APOIO
-// =========================
-
-function getSpreadsheet_() {
-  // Tenta pegar a planilha ativa (script vinculado). Se não der, abre por nome.
-  try {
-    const ssAtiva = SpreadsheetApp.getActiveSpreadsheet();
-    if (ssAtiva) return ssAtiva;
-  } catch (e) {
-    // ignora e tenta por nome
+function aplicarPermissoesPorPapel(papel) {
+  if (papel !== 'cadastro') {
+    // admin vê tudo -> nada a esconder
+    return;
   }
-  return SpreadsheetApp.openByName(NOME_PLANILHA);
+
+  // Seções que só o admin deve ver
+  const alvosAdminTargets = [
+    '#secNovoCliente',
+    '#secNovoServico',
+    '#secNovaDespesa',
+    '#secListaClientes',
+    '#secListaServicos',
+    '#secListaDespesas',
+    '#secHistorico'
+  ];
+
+  // Esconde botões que abrem esses collapses
+  alvosAdminTargets.forEach((target) => {
+    document
+      .querySelectorAll(`[data-bs-target="${target}"]`)
+      .forEach((btn) => btn.classList.add('d-none'));
+
+    const sec = document.querySelector(target);
+    if (sec) {
+      sec.classList.add('d-none');
+    }
+  });
 }
 
-function getSheet_(nomeAba) {
-  const ss = getSpreadsheet_();
-  const sh = ss.getSheetByName(nomeAba);
-  if (!sh) throw new Error('Aba não encontrada: ' + nomeAba);
-  return sh;
+// =======================================================
+// INICIALIZAÇÃO DO APP (DEPOIS DO LOGIN)
+// =======================================================
+
+function inicializarApp() {
+  // Define mês atual no resumo
+  const mesResumo = document.getElementById('mesResumo');
+  if (mesResumo) {
+    const hoje = new Date();
+    const ano = hoje.getFullYear();
+    const mes = String(hoje.getMonth() + 1).padStart(2, '0');
+    mesResumo.value = `${ano}-${mes}`;
+    mesResumo.addEventListener('change', atualizarResumoFinanceiro);
+  }
+
+  // Listeners dos formulários
+  const formCliente = document.getElementById('formCliente');
+  if (formCliente) {
+    formCliente.addEventListener('submit', handleSubmitCliente);
+  }
+
+  const formServico = document.getElementById('formServico');
+  if (formServico) {
+    formServico.addEventListener('submit', handleSubmitServico);
+  }
+
+  const formAtendimento = document.getElementById('formAtendimento');
+  if (formAtendimento) {
+    formAtendimento.addEventListener('submit', handleSubmitAtendimento);
+  }
+
+  const formDespesa = document.getElementById('formDespesa');
+  if (formDespesa) {
+    formDespesa.addEventListener('submit', handleSubmitDespesa);
+  }
+
+  // Carregamento inicial de dados
+  carregarTodosOsDados();
 }
 
-function json_(obj) {
-  return ContentService
-    .createTextOutput(JSON.stringify(obj))
-    .setMimeType(ContentService.MimeType.JSON);
-}
-
-// =========================
-// HANDLERS HTTP
-// =========================
-
-function doGet(e) {
-  let resp;
+async function carregarTodosOsDados() {
   try {
-    const action = e && e.parameter && e.parameter.action;
+    await Promise.all([
+      carregarClientes(),
+      carregarServicos(),
+      carregarAtendimentos(),
+      carregarDespesas(),
+      atualizarResumoFinanceiro()
+    ]);
+  } catch (err) {
+    console.error('Erro ao carregar dados iniciais:', err);
+    alert('Erro ao carregar dados iniciais. Verifique o console.');
+  }
+}
 
-    switch (action) {
-      case 'listClientes':
-        resp = { sucesso: true, clientes: listarClientes_() };
-        break;
+// =======================================================
+// FUNÇÕES AUXILIARES DE API
+// =======================================================
 
-      case 'listServicos':
-        resp = { sucesso: true, servicos: listarServicos_() };
-        break;
+async function apiGet(paramsObj) {
+  const url = `${API_URL}?${new URLSearchParams(paramsObj).toString()}`;
+  const resp = await fetch(url);
+  if (!resp.ok) {
+    throw new Error(`HTTP ${resp.status}`);
+  }
+  const data = await resp.json();
+  if (data && data.sucesso === false) {
+    throw new Error(data.mensagem || 'Erro na API (GET).');
+  }
+  return data;
+}
 
-      case 'listAtendimentos':
-        resp = { sucesso: true, atendimentos: listarAtendimentos_() };
-        break;
+async function apiPost(bodyObj) {
+  const resp = await fetch(API_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json;charset=utf-8' },
+    body: JSON.stringify(bodyObj)
+  });
+  if (!resp.ok) {
+    throw new Error(`HTTP ${resp.status}`);
+  }
+  const data = await resp.json();
+  if (data && data.sucesso === false) {
+    throw new Error(data.mensagem || 'Erro na API (POST).');
+  }
+  return data;
+}
 
-      case 'listDespesas':
-        resp = { sucesso: true, despesas: listarDespesas_() };
-        break;
+function formatarDataBR(valor) {
+  if (!valor) return '';
+  const d = valor instanceof Date ? valor : new Date(valor);
+  if (isNaN(d.getTime())) return '';
+  return d.toLocaleDateString('pt-BR');
+}
 
-      case 'resumoMensal':
-        resp = resumoMensal_(e);
-        break;
+function formatarMoedaBR(valor) {
+  const num = Number(valor) || 0;
+  return num.toLocaleString('pt-BR', {
+    style: 'currency',
+    currency: 'BRL'
+  });
+}
 
-      default:
-        resp = {
-          sucesso: false,
-          mensagem: 'Parâmetro "action" inválido ou não informado.'
-        };
+// =======================================================
+// CARREGAR CLIENTES / SERVIÇOS / ATENDIMENTOS / DESPESAS
+// =======================================================
+
+async function carregarClientes() {
+  const data = await apiGet({ action: 'listClientes' });
+  cacheClientes = data.clientes || [];
+  mapaClientes = {};
+
+  const selectCliente = document.getElementById('atCliente');
+  const tbody = document.getElementById('tabelaClientes');
+
+  if (selectCliente) {
+    selectCliente.innerHTML = '<option value="">Selecione um cliente...</option>';
+  }
+  if (tbody) {
+    tbody.innerHTML = '';
+  }
+
+  cacheClientes.forEach((cli) => {
+    const id = cli.ID_CLIENTE;
+    const nome = cli.NOME;
+    mapaClientes[id] = nome;
+
+    if (selectCliente) {
+      const opt = document.createElement('option');
+      opt.value = id;
+      opt.textContent = nome;
+      selectCliente.appendChild(opt);
+    }
+
+    if (tbody) {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td>${nome || ''}</td>
+        <td>${cli.TELEFONE || ''}</td>
+        <td>${cli.OBSERVACOES || ''}</td>
+      `;
+      tbody.appendChild(tr);
+    }
+  });
+}
+
+async function carregarServicos() {
+  const data = await apiGet({ action: 'listServicos' });
+  cacheServicos = data.servicos || [];
+  mapaServicos = {};
+
+  const selectServico = document.getElementById('atServico');
+  const tbody = document.getElementById('tabelaServicos');
+
+  if (selectServico) {
+    selectServico.innerHTML = '<option value="">Selecione um serviço...</option>';
+  }
+  if (tbody) {
+    tbody.innerHTML = '';
+  }
+
+  cacheServicos.forEach((srv) => {
+    const id = srv.ID_SERVICO;
+    const nome = srv.NOME_SERVICO;
+    mapaServicos[id] = nome;
+
+    if (selectServico) {
+      const opt = document.createElement('option');
+      opt.value = id;
+      opt.textContent = nome;
+      selectServico.appendChild(opt);
+    }
+
+    if (tbody) {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td>${nome || ''}</td>
+        <td>${srv.CATEGORIA || ''}</td>
+        <td>${formatarMoedaBR(srv.PRECO_BASE)}</td>
+        <td>${srv.ATIVO ? 'Sim' : 'Não'}</td>
+      `;
+      tbody.appendChild(tr);
+    }
+  });
+}
+
+async function carregarAtendimentos() {
+  const data = await apiGet({ action: 'listAtendimentos' });
+  cacheAtendimentos = data.atendimentos || [];
+
+  const tbody = document.getElementById('tabelaAtendimentos');
+  if (!tbody) return;
+  tbody.innerHTML = '';
+
+  cacheAtendimentos.forEach((at) => {
+    const nomeCli = mapaClientes[at.ID_CLIENTE] || at.ID_CLIENTE;
+    const nomeSrv = mapaServicos[at.ID_SERVICO] || at.ID_SERVICO;
+
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${formatarDataBR(at.DATA)}</td>
+      <td>${nomeCli}</td>
+      <td>${nomeSrv}</td>
+      <td>${formatarMoedaBR(at.VALOR_TOTAL)}</td>
+      <td>${at.FORMA_PAGAMENTO || ''}</td>
+      <td>${at.OBSERVACOES || ''}</td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
+async function carregarDespesas() {
+  const data = await apiGet({ action: 'listDespesas' });
+  cacheDespesas = data.despesas || [];
+
+  const tbody = document.getElementById('tabelaDespesas');
+  if (!tbody) return;
+  tbody.innerHTML = '';
+
+  cacheDespesas.forEach((dp) => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${formatarDataBR(dp.DATA)}</td>
+      <td>${dp.CATEGORIA || ''}</td>
+      <td>${dp.DESCRICAO || ''}</td>
+      <td>${formatarMoedaBR(dp.VALOR)}</td>
+      <td>${dp.FORMA_PAGAMENTO || ''}</td>
+      <td>${dp.OBSERVACOES || ''}</td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
+// =======================================================
+// RESUMO FINANCEIRO
+// =======================================================
+
+async function atualizarResumoFinanceiro() {
+  const mesResumo = document.getElementById('mesResumo');
+  if (!mesResumo || !mesResumo.value) return;
+
+  try {
+    const data = await apiGet({
+      action: 'resumoMensal',
+      mes: mesResumo.value
+    });
+
+    const elEntradas = document.getElementById('resumoEntradas');
+    const elSaidas = document.getElementById('resumoSaidas');
+    const elResultado = document.getElementById('resumoResultado');
+
+    if (elEntradas) {
+      elEntradas.textContent = formatarMoedaBR(data.totalEntradas || 0);
+    }
+    if (elSaidas) {
+      elSaidas.textContent = formatarMoedaBR(data.totalSaidas || 0);
+    }
+    if (elResultado) {
+      elResultado.textContent = formatarMoedaBR(data.resultado || 0);
     }
   } catch (err) {
-    resp = { sucesso: false, mensagem: 'Erro interno (GET): ' + err };
+    console.error('Erro ao atualizar resumo financeiro:', err);
+    alert('Erro ao atualizar resumo financeiro. Verifique o console.');
   }
-
-  return json_(resp);
 }
 
-function doPost(e) {
-  let body = {};
+// =======================================================
+// HANDLERS DE FORMULÁRIO
+// =======================================================
+
+async function handleSubmitCliente(e) {
+  e.preventDefault();
+  const nome = document.getElementById('clienteNome').value.trim();
+  const telefone = document.getElementById('clienteTelefone').value.trim();
+  const obs = document.getElementById('clienteObs').value.trim();
+
+  if (!nome) {
+    alert('Informe o nome do cliente.');
+    return;
+  }
+
   try {
-    if (e && e.postData && e.postData.contents) {
-      body = JSON.parse(e.postData.contents);
-    }
+    await apiPost({
+      tipoRegistro: 'cliente',
+      nome,
+      telefone,
+      observacoes: obs
+    });
+    alert('Cliente salvo com sucesso!');
+    e.target.reset();
+    await carregarClientes();
   } catch (err) {
-    return json_({
-      sucesso: false,
-      mensagem: 'JSON inválido no corpo da requisição.'
-    });
+    console.error('Erro ao salvar cliente:', err);
+    alert('Erro ao salvar cliente. Verifique o console.');
+  }
+}
+
+async function handleSubmitServico(e) {
+  e.preventDefault();
+  const nomeServico = document.getElementById('servicoNome').value.trim();
+  const categoria = document.getElementById('servicoCategoria').value.trim();
+  const precoBase = Number(
+    document.getElementById('servicoPreco').value.replace(',', '.')
+  ) || 0;
+
+  if (!nomeServico) {
+    alert('Informe o nome do serviço.');
+    return;
   }
 
-  let resp;
   try {
-    const tipo = body.tipoRegistro;
-    switch (tipo) {
-      case 'cliente':
-        resp = salvarCliente_(body);
-        break;
-
-      case 'servico':
-        resp = salvarServico_(body);
-        break;
-
-      case 'atendimento':
-        resp = salvarAtendimento_(body);
-        break;
-
-      case 'despesa':
-        resp = salvarDespesa_(body);
-        break;
-
-      default:
-        resp = {
-          sucesso: false,
-          mensagem: 'tipoRegistro inválido ou não informado.'
-        };
-    }
-  } catch (err2) {
-    resp = { sucesso: false, mensagem: 'Erro interno (POST): ' + err2 };
-  }
-
-  return json_(resp);
-}
-
-// =========================
-// CLIENTES
-// =========================
-
-function salvarCliente_(dados) {
-  const sh = getSheet_(ABA_CLIENTES);
-
-  const id = 'C_' + new Date().getTime();
-  const nome = (dados.nome || '').toString().trim();
-  const telefone = (dados.telefone || '').toString().trim();
-  const obs = (dados.observacoes || '').toString().trim();
-
-  if (!nome) {
-    return { sucesso: false, mensagem: 'Nome do cliente é obrigatório.' };
-  }
-
-  sh.appendRow([
-    id,
-    nome,
-    telefone,
-    obs,
-    new Date()     // DATA_CADASTRO
-  ]);
-
-  return { sucesso: true, idCliente: id };
-}
-
-function listarClientes_() {
-  const sh = getSheet_(ABA_CLIENTES);
-  const values = sh.getDataRange().getValues(); // inclui cabeçalho
-  const out = [];
-
-  for (let i = 1; i < values.length; i++) {
-    const row = values[i];
-    const id = row[0];
-    if (!id) continue;
-
-    out.push({
-      ID_CLIENTE: id,
-      NOME: row[1],
-      TELEFONE: row[2],
-      OBSERVACOES: row[3],
-      DATA_CADASTRO: row[4]
+    await apiPost({
+      tipoRegistro: 'servico',
+      nomeServico,
+      categoria,
+      precoBase,
+      ativo: true
     });
+    alert('Serviço salvo com sucesso!');
+    e.target.reset();
+    await carregarServicos();
+  } catch (err) {
+    console.error('Erro ao salvar serviço:', err);
+    alert('Erro ao salvar serviço. Verifique o console.');
   }
-  return out;
 }
 
-// =========================
-// SERVIÇOS
-// =========================
+async function handleSubmitAtendimento(e) {
+  e.preventDefault();
 
-function salvarServico_(dados) {
-  const sh = getSheet_(ABA_SERVICOS);
+  const data = document.getElementById('atData').value;
+  const idCliente = document.getElementById('atCliente').value;
+  const idServico = document.getElementById('atServico').value;
+  const valorStr = document.getElementById('atValor').value;
+  const formaPagamento = document.getElementById('atFormaPgto').value;
+  const obs = document.getElementById('atObs').value.trim();
 
-  const id = 'S_' + new Date().getTime();
-  const nome = (dados.nomeServico || dados.nome || '').toString().trim();
-  const categoria = (dados.categoria || '').toString().trim();
-  const precoBase = Number(dados.precoBase) || 0;
-  const ativo = dados.ativo === false ? false : true; // padrão true
+  const valorTotal = Number(valorStr.replace(',', '.')) || 0;
 
-  if (!nome) {
-    return { sucesso: false, mensagem: 'Nome do serviço é obrigatório.' };
+  if (!data || !idCliente || !idServico || !valorTotal || !formaPagamento) {
+    alert('Preencha todos os campos obrigatórios do atendimento.');
+    return;
   }
 
-  sh.appendRow([
-    id,
-    nome,
-    categoria,
-    precoBase,
-    ativo,
-    new Date() // DATA_CADASTRO
-  ]);
-
-  return { sucesso: true, idServico: id };
-}
-
-function listarServicos_() {
-  const sh = getSheet_(ABA_SERVICOS);
-  const values = sh.getDataRange().getValues();
-  const out = [];
-
-  for (let i = 1; i < values.length; i++) {
-    const row = values[i];
-    const id = row[0];
-    if (!id) continue;
-
-    out.push({
-      ID_SERVICO: id,
-      NOME_SERVICO: row[1],
-      CATEGORIA: row[2],
-      PRECO_BASE: row[3],
-      ATIVO: row[4],
-      DATA_CADASTRO: row[5]
+  try {
+    await apiPost({
+      tipoRegistro: 'atendimento',
+      data,
+      idCliente,
+      idServico,
+      valorTotal,
+      formaPagamento,
+      observacoes: obs
     });
+
+    alert('Atendimento registrado com sucesso!');
+    e.target.reset();
+
+    await Promise.all([
+      carregarAtendimentos(),
+      atualizarResumoFinanceiro()
+    ]);
+  } catch (err) {
+    console.error('Erro ao salvar atendimento:', err);
+    alert('Erro ao salvar atendimento. Verifique o console.');
   }
-  return out;
 }
 
-// =========================
-// ATENDIMENTOS
-// =========================
+async function handleSubmitDespesa(e) {
+  e.preventDefault();
 
-function salvarAtendimento_(dados) {
-  const sh = getSheet_(ABA_ATENDIMENTOS);
+  const data = document.getElementById('despData').value;
+  const categoria = document.getElementById('despCategoria').value.trim();
+  const descricao = document.getElementById('despDescricao').value.trim();
+  const valorStr = document.getElementById('despValor').value;
+  const formaPagamento = document.getElementById('despFormaPgto').value;
+  const obs = document.getElementById('despObs').value.trim();
 
-  const dataStr = dados.data; // esperado "YYYY-MM-DD"
-  const data = dataStr ? new Date(dataStr) : new Date();
+  const valor = Number(valorStr.replace(',', '.')) || 0;
 
-  const idCliente = dados.idCliente;
-  const idServico = dados.idServico;
-  const valorTotal = Number(dados.valorTotal) || 0;
-  const formaPagamento = (dados.formaPagamento || '').toString().trim();
-  const obs = (dados.observacoes || '').toString().trim();
-
-  if (!dataStr || !idCliente || !idServico || !formaPagamento || valorTotal <= 0) {
-    return {
-      sucesso: false,
-      mensagem: 'Campos obrigatórios: data, cliente, serviço, formaPagamento e valorTotal > 0.'
-    };
+  if (!data || !categoria || !valor) {
+    alert('Preencha data, categoria e valor da despesa.');
+    return;
   }
 
-  sh.appendRow([
-    data,
-    idCliente,
-    idServico,
-    valorTotal,
-    formaPagamento,
-    obs,
-    new Date() // DATA_REGISTRO
-  ]);
-
-  return { sucesso: true };
-}
-
-function listarAtendimentos_() {
-  const sh = getSheet_(ABA_ATENDIMENTOS);
-  const values = sh.getDataRange().getValues();
-  const out = [];
-
-  for (let i = 1; i < values.length; i++) {
-    const row = values[i];
-    const data = row[0];
-    const idCliente = row[1];
-    if (!data || !idCliente) continue;
-
-    out.push({
-      DATA: data,
-      ID_CLIENTE: idCliente,
-      ID_SERVICO: row[2],
-      VALOR_TOTAL: row[3],
-      FORMA_PAGAMENTO: row[4],
-      OBSERVACOES: row[5]
+  try {
+    await apiPost({
+      tipoRegistro: 'despesa',
+      data,
+      categoria,
+      descricao,
+      valor,
+      formaPagamento,
+      observacoes: obs
     });
+
+    alert('Despesa registrada com sucesso!');
+    e.target.reset();
+
+    await Promise.all([
+      carregarDespesas(),
+      atualizarResumoFinanceiro()
+    ]);
+  } catch (err) {
+    console.error('Erro ao salvar despesa:', err);
+    alert('Erro ao salvar despesa. Verifique o console.');
   }
-  return out;
-}
-
-// =========================
-// DESPESAS
-// =========================
-
-function salvarDespesa_(dados) {
-  const sh = getSheet_(ABA_DESPESAS);
-
-  const dataStr = dados.data;
-  const data = dataStr ? new Date(dataStr) : new Date();
-
-  const categoria = (dados.categoria || '').toString().trim();
-  const descricao = (dados.descricao || '').toString().trim();
-  const valor = Number(dados.valor) || 0;
-  const formaPagamento = (dados.formaPagamento || '').toString().trim();
-  const obs = (dados.observacoes || '').toString().trim();
-
-  if (!dataStr || !categoria || valor <= 0) {
-    return {
-      sucesso: false,
-      mensagem: 'Data, categoria e valor > 0 são obrigatórios para despesa.'
-    };
-  }
-
-  sh.appendRow([
-    data,
-    categoria,
-    descricao,
-    valor,
-    formaPagamento,
-    obs,
-    new Date() // DATA_REGISTRO
-  ]);
-
-  return { sucesso: true };
-}
-
-function listarDespesas_() {
-  const sh = getSheet_(ABA_DESPESAS);
-  const values = sh.getDataRange().getValues();
-  const out = [];
-
-  for (let i = 1; i < values.length; i++) {
-    const row = values[i];
-    const data = row[0];
-    if (!data) continue;
-
-    out.push({
-      DATA: data,
-      CATEGORIA: row[1],
-      DESCRICAO: row[2],
-      VALOR: row[3],
-      FORMA_PAGAMENTO: row[4],
-      OBSERVACOES: row[5]
-    });
-  }
-  return out;
-}
-
-// =========================
-// RESUMO MENSAL (ENTRADAS x SAÍDAS)
-// =========================
-
-function resumoMensal_(e) {
-  const mesParam = e && e.parameter && e.parameter.mes;
-  if (!mesParam) {
-    return {
-      sucesso: false,
-      mensagem: 'Parâmetro "mes" (YYYY-MM) é obrigatório.'
-    };
-  }
-
-  const partes = mesParam.split('-');
-  if (partes.length !== 2) {
-    return {
-      sucesso: false,
-      mensagem: 'Parâmetro "mes" inválido. Use formato YYYY-MM.'
-    };
-  }
-
-  const ano = parseInt(partes[0], 10);
-  const mes = parseInt(partes[1], 10);
-  if (isNaN(ano) || isNaN(mes)) {
-    return {
-      sucesso: false,
-      mensagem: 'Parâmetro "mes" inválido. Use formato YYYY-MM.'
-    };
-  }
-
-  const inicio = new Date(ano, mes - 1, 1);
-  const fim    = new Date(ano, mes, 0);
-
-  let totalEntradas = 0;
-  let totalSaidas   = 0;
-
-  // ===== ENTRADAS (ATENDIMENTOS) =====
-  const shAt = getSheet_(ABA_ATENDIMENTOS);
-  const valsAt = shAt.getDataRange().getValues(); // inclui cabeçalho
-  for (let i = 1; i < valsAt.length; i++) {
-    const row  = valsAt[i];
-    const data = row[0];              // Col A = DATA
-    const val  = Number(row[3]) || 0; // Col D = VALOR_TOTAL
-
-    if (data instanceof Date && data >= inicio && data <= fim) {
-      totalEntradas += val;
-    }
-  }
-
-  // ===== SAÍDAS (DESPESAS) =====
-  const shDp = getSheet_(ABA_DESPESAS);
-  const valsDp = shDp.getDataRange().getValues();
-  for (let i = 1; i < valsDp.length; i++) {
-    const row  = valsDp[i];
-    const data = row[0];              // Col A = DATA
-    const val  = Number(row[3]) || 0; // Col D = VALOR
-
-    if (data instanceof Date && data >= inicio && data <= fim) {
-      totalSaidas += val;
-    }
-  }
-
-  return {
-    sucesso: true,
-    mes: mesParam,
-    totalEntradas: totalEntradas,
-    totalSaidas:   totalSaidas,
-    resultado:     totalEntradas - totalSaidas
-  };
 }
