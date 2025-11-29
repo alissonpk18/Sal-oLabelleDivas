@@ -33,13 +33,13 @@ Versão 1.5 — 29/11/2025 / Mudança: inclusão de tela de login simples (admin
 <body class="bg-light">
 
     <!-- TELA DE LOGIN -->
-    <div id="loginContainer" class="min-vh-100 d-flex align-items-center justify-content-center bg-light">
+    <div id="loginWrapper" class="min-vh-100 d-flex align-items-center justify-content-center bg-light">
         <div class="card shadow-sm" style="max-width: 400px; width: 100%;">
             <div class="card-header text-center">
                 <h5 class="mb-0">Acesso - La Belle Divas</h5>
             </div>
             <div class="card-body">
-                <form id="formLogin">
+                <form id="loginForm">
                     <div class="mb-3">
                         <label for="loginUsuario" class="form-label small text-muted text-uppercase fw-bold">
                             Usuário
@@ -80,7 +80,7 @@ Versão 1.5 — 29/11/2025 / Mudança: inclusão de tela de login simples (admin
     </div>
 
     <!-- APP PRINCIPAL (SÓ APARECE APÓS LOGIN) -->
-    <div id="appContainer" class="d-none">
+    <div id="appMain" class="d-none">
 
         <!-- HEADER -->
         <header class="py-4 mb-5 shadow">
@@ -748,3 +748,4 @@ Versão 1.5 — 29/11/2025 / Mudança: inclusão de tela de login simples (admin
     <script src="script.js"></script>
 </body>
 </html>
+
