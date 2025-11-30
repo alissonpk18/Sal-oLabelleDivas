@@ -171,14 +171,13 @@ function aplicarRoleNaInterface() {
   const isCadastro = currentRole === 'cadastro';
 
   const elementosRestritos = [
-    document.querySelector('section.mb-3'), // botões Novo Cliente / Novo Serviço / Despesa
-    document.getElementById('secNovoCliente'),
     document.getElementById('secNovoServico'),
     document.getElementById('secNovaDespesa'),
     document.getElementById('secListaClientes'),
     document.getElementById('secListaServicos'),
     document.getElementById('secListaDespesas'),
     document.getElementById('secHistorico')
+    document.getElementById('secResumoFinanceiro')
   ];
 
   elementosRestritos.forEach(el => {
@@ -601,3 +600,4 @@ async function atualizarResumoFinanceiro() {
     alert('Erro ao atualizar resumo financeiro. Verifique o console.');
   }
 }
+
