@@ -160,37 +160,22 @@ function formatarData(valor) {
   return `${dia}/${mes}/${ano}`;
 }
 
-async function apiGet(action, params = {}) {
-  const url = new URL(API_URL);
-  url.searchParams.set('action', action);
-  Object.entries(params).forEach(([k, v]) => {
-    if (v !== undefined && v !== null) {
-      url.searchParams.set(k, v);
-    }
-  });
-
-  console.log('[apiGet] URL:', url.toString());
-
-  const resp = await fetch(url.toString());
-  if (!resp.ok) {
-    throw new Error(`HTTP ${resp.status} - ${resp.statusText}`);
-  }
-
-  const data = await resp.json();
-  console.log('[apiGet] resposta:', data);
-
-  if (!data.sucesso) {
-    throw new Error(data.mensagem || 'Erro retornado pela API.');
-  }
-  return data;
-}
+// Fluxograma (apiPost):
+// Entrada → tipoRegistro + payload
+//   → monta corpo JSON e envia POST (text/plain) para Apps Script
+//   → valida HTTP (resp.ok) e campo sucesso
+// Saída → objeto data retornado pela API
+// Versão 1.7 — 30/11/2025 / Mudança: Content-Type text/plain para evitar preflight CORS
 
 async function apiPost(tipoRegistro, payload) {
   console.log('[apiPost] tipoRegistro:', tipoRegistro, 'payload:', payload);
 
   const resp = await fetch(API_URL, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      // usando text/plain para evitar preflight CORS no WebApp do Apps Script
+      'Content-Type': 'text/plain;charset=utf-8'
+    },
     body: JSON.stringify({
       tipoRegistro,
       ...payload
@@ -207,6 +192,7 @@ async function apiPost(tipoRegistro, payload) {
   if (!data.sucesso) {
     throw new Error(data.mensagem || 'Erro retornado pela API.');
   }
+
   return data;
 }
 
@@ -657,6 +643,7 @@ document.addEventListener('DOMContentLoaded', () => {
   console.log('[INFO] DOM carregado, iniciando configuração de login...');
   configurarLogin();
 });
+
 
 
 
