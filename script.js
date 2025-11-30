@@ -167,7 +167,7 @@ let cacheDespesas     = [];
 
 function aplicarRoleNaInterface() {
   // admin: vê tudo
-  // cadastro: vê apenas o formulário de atendimento
+  // cadastro: vê apenas o formulário de atendimento + cadastro de cliente
   const isCadastro = currentRole === 'cadastro';
 
   const elementosRestritos = [
@@ -176,8 +176,8 @@ function aplicarRoleNaInterface() {
     document.getElementById('secListaClientes'),
     document.getElementById('secListaServicos'),
     document.getElementById('secListaDespesas'),
-    document.getElementById('secHistorico')
-    document.getElementById('secResumoFinanceiro')
+    document.getElementById('secHistorico'),
+    document.getElementById('secResumoFinanceiro') // RESUMO FINANCEIRO
   ];
 
   elementosRestritos.forEach(el => {
@@ -189,6 +189,7 @@ function aplicarRoleNaInterface() {
     }
   });
 }
+
 
 async function posLoginCarregarApp() {
   try {
@@ -609,5 +610,6 @@ async function atualizarResumoFinanceiro() {
     alert('Erro ao atualizar resumo financeiro. Verifique o console.');
   }
 }
+
 
 
