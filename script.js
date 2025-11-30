@@ -4,7 +4,7 @@
  * Validação → login simples (usuário/senha) + validação básica de formulários
  * Lógica → chamadas à API (GET/POST) para CLIENTES, SERVICOS, ATENDIMENTOS, DESPESAS e RESUMO MENSAL
  * Saída → atualização dos selects, tabelas e cards de resumo financeiro
- * Versão 1.6 — 29/11/2025 / Mudança: correção API_URL, tratamento de datas ISO, logs de debug e ajustes de login
+ * Versão 1.10 — 30/11/2025 / Mudança: unificação de login, cache declarado, apiGet com throwOnError e carregamento inicial tolerante a falhas
  */
 
 // =============================
@@ -29,6 +29,137 @@ const LOGIN_SENHA = '1234';
 
 // papel do usuário logado
 let currentRole = null;
+
+// =============================
+// FUNÇÕES AUXILIARES GERAIS
+// =============================
+
+function formatarMoeda(valor) {
+  const n = Number(valor) || 0;
+  return n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+}
+
+/**
+ * Aceita Date ou string ISO (ex.: "2025-11-29T15:16:17.000Z")
+ */
+function formatarData(valor) {
+  if (!valor) return '';
+
+  let d;
+  if (valor instanceof Date) {
+    d = valor;
+  } else {
+    d = new Date(valor);
+  }
+
+  if (isNaN(d.getTime())) {
+    return valor; // devolve como veio, se não conseguir converter
+  }
+
+  const dia = String(d.getDate()).padStart(2, '0');
+  const mes = String(d.getMonth() + 1).padStart(2, '0');
+  const ano = d.getFullYear();
+  return `${dia}/${mes}/${ano}`;
+}
+
+// =============================
+// FUNÇÕES DE CHAMADA À API
+// =============================
+
+// Fluxograma (apiPost):
+// Entrada → tipoRegistro + payload
+//   → monta corpo JSON e envia POST (text/plain) para Apps Script
+//   → valida HTTP (resp.ok) e campo sucesso
+// Saída → objeto data retornado pela API
+// Versão 1.7 — 30/11/2025 / Mudança: Content-Type text/plain para evitar preflight CORS
+
+async function apiPost(tipoRegistro, payload) {
+  console.log('[apiPost] tipoRegistro:', tipoRegistro, 'payload:', payload);
+
+  const resp = await fetch(API_URL, {
+    method: 'POST',
+    headers: {
+      // usando text/plain para evitar preflight CORS no WebApp do Apps Script
+      'Content-Type': 'text/plain;charset=utf-8'
+    },
+    body: JSON.stringify({
+      tipoRegistro,
+      ...payload
+    })
+  });
+
+  if (!resp.ok) {
+    throw new Error(`HTTP ${resp.status} - ${resp.statusText}`);
+  }
+
+  const data = await resp.json();
+  console.log('[apiPost] resposta:', data);
+
+  if (!data.sucesso) {
+    throw new Error(data.mensagem || 'Erro retornado pela API.');
+  }
+
+  return data;
+}
+
+// Fluxograma (apiGet):
+// Entrada → action + params + options{throwOnError}
+//   → monta URL com action/params e faz fetch GET
+//   → se HTTP erro: lança erro OU retorna {sucesso:false} (conforme throwOnError)
+//   → se sucesso=false na API: idem acima
+// Saída → objeto data (sempre) ou exceção, conforme throwOnError
+// Versão 1.9 — 30/11/2025 / Mudança: suporte a throwOnError para usar com Promise.allSettled
+
+async function apiGet(action, params = {}, options = {}) {
+  const { throwOnError = true } = options;
+
+  const url = new URL(API_URL);
+  url.searchParams.set('action', action);
+  Object.entries(params).forEach(([k, v]) => {
+    if (v !== undefined && v !== null) {
+      url.searchParams.set(k, v);
+    }
+  });
+
+  console.log('[apiGet] URL:', url.toString());
+
+  const resp = await fetch(url.toString());
+  if (!resp.ok) {
+    const err = new Error(`HTTP ${resp.status} - ${resp.statusText}`);
+    console.error('[apiGet] ERRO HTTP:', err);
+
+    if (throwOnError) {
+      throw err;
+    }
+    // modo tolerante: devolve objeto de erro em vez de lançar
+    return { sucesso: false, mensagem: err.message };
+  }
+
+  const data = await resp.json();
+  console.log('[apiGet] resposta:', data);
+
+  if (!data.sucesso) {
+    const err = new Error(data.mensagem || 'Erro retornado pela API.');
+    console.error('[apiGet] ERRO lógico:', err);
+
+    if (throwOnError) {
+      throw err;
+    }
+    // modo tolerante: devolve resposta mesmo com sucesso=false
+    return data;
+  }
+
+  return data;
+}
+
+// =============================
+// CACHE EM MEMÓRIA
+// =============================
+
+let cacheClientes     = [];
+let cacheServicos     = [];
+let cacheAtendimentos = [];
+let cacheDespesas     = [];
 
 // =============================
 // LOGIN E CONTROLE DE INTERFACE
@@ -114,7 +245,7 @@ function configurarLogin() {
     appMain.classList.remove('d-none');
 
     aplicarRoleNaInterface();
-    posLoginCarregarApp(); // chama async, mas não precisa do await aqui
+    posLoginCarregarApp(); // async, não precisa de await aqui
   });
 }
 
@@ -126,126 +257,6 @@ document.addEventListener('DOMContentLoaded', () => {
   console.log('[INFO] DOM carregado, configurando login...');
   configurarLogin();
 });
-
-
-// =============================
-// FUNÇÕES AUXILIARES
-// =============================
-
-function formatarMoeda(valor) {
-  const n = Number(valor) || 0;
-  return n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-}
-
-/**
- * Aceita Date ou string ISO (ex.: "2025-11-29T15:16:17.000Z")
- */
-function formatarData(valor) {
-  if (!valor) return '';
-
-  let d;
-  if (valor instanceof Date) {
-    d = valor;
-  } else {
-    d = new Date(valor);
-  }
-
-  if (isNaN(d.getTime())) {
-    return valor; // devolve como veio, se não conseguir converter
-  }
-
-  const dia = String(d.getDate()).padStart(2, '0');
-  const mes = String(d.getMonth() + 1).padStart(2, '0');
-  const ano = d.getFullYear();
-  return `${dia}/${mes}/${ano}`;
-}
-
-// Fluxograma (apiPost):
-// Entrada → tipoRegistro + payload
-//   → monta corpo JSON e envia POST (text/plain) para Apps Script
-//   → valida HTTP (resp.ok) e campo sucesso
-// Saída → objeto data retornado pela API
-// Versão 1.7 — 30/11/2025 / Mudança: Content-Type text/plain para evitar preflight CORS
-
-async function apiPost(tipoRegistro, payload) {
-  console.log('[apiPost] tipoRegistro:', tipoRegistro, 'payload:', payload);
-
-  const resp = await fetch(API_URL, {
-    method: 'POST',
-    headers: {
-      // usando text/plain para evitar preflight CORS no WebApp do Apps Script
-      'Content-Type': 'text/plain;charset=utf-8'
-    },
-    body: JSON.stringify({
-      tipoRegistro,
-      ...payload
-    })
-  });
-
-  if (!resp.ok) {
-    throw new Error(`HTTP ${resp.status} - ${resp.statusText}`);
-  }
-
-  const data = await resp.json();
-  console.log('[apiPost] resposta:', data);
-
-  if (!data.sucesso) {
-    throw new Error(data.mensagem || 'Erro retornado pela API.');
-  }
-
-  return data;
-}
-// Fluxograma (apiGet):
-// Entrada → action + params + options{throwOnError}
-//   → monta URL com action/params e faz fetch GET
-//   → se HTTP erro: lança erro OU retorna {sucesso:false} (conforme throwOnError)
-//   → se sucesso=false na API: idem acima
-// Saída → objeto data (sempre) ou exceção, conforme throwOnError
-// Versão 1.9 — 30/11/2025 / Mudança: suporte a throwOnError para usar com Promise.allSettled
-
-async function apiGet(action, params = {}, options = {}) {
-  const { throwOnError = true } = options;
-
-  const url = new URL(API_URL);
-  url.searchParams.set('action', action);
-  Object.entries(params).forEach(([k, v]) => {
-    if (v !== undefined && v !== null) {
-      url.searchParams.set(k, v);
-    }
-  });
-
-  console.log('[apiGet] URL:', url.toString());
-
-  const resp = await fetch(url.toString());
-  if (!resp.ok) {
-    const err = new Error(`HTTP ${resp.status} - ${resp.statusText}`);
-    console.error('[apiGet] ERRO HTTP:', err);
-
-    if (throwOnError) {
-      throw err;
-    }
-    // modo tolerante: devolve objeto de erro em vez de lançar
-    return { sucesso: false, mensagem: err.message };
-  }
-
-  const data = await resp.json();
-  console.log('[apiGet] resposta:', data);
-
-  if (!data.sucesso) {
-    const err = new Error(data.mensagem || 'Erro retornado pela API.');
-    console.error('[apiGet] ERRO lógico:', err);
-
-    if (throwOnError) {
-      throw err;
-    }
-    // modo tolerante: devolve resposta mesmo com sucesso=false
-    return data;
-  }
-
-  return data;
-}
-
-
 
 // =============================
 // CARREGAMENTO INICIAL
@@ -259,9 +270,6 @@ async function apiGet(action, params = {}, options = {}) {
  * Saída   → selects e tabelas atualizados; logs de erro/aviso se algo falhar
  * Versão 1.8 — 29/11/2025 / Mudança: tolerância a falha em uma action e logs mais claros
  */
-// =============================
-// CARREGAMENTO INICIAL (NOVA VERSÃO)
-// =============================
 async function carregarDadosIniciais() {
   console.log('[INFO] Carregando dados iniciais...');
 
@@ -313,7 +321,6 @@ async function carregarDadosIniciais() {
 
   console.log('[INFO] Dados iniciais carregados (com tolerância a falhas).');
 }
-
 
 // =============================
 // PREENCHIMENTO DE SELECTS
@@ -380,7 +387,7 @@ function renderTabelaServicos() {
       <td>${s.NOME_SERVICO || s.NOME || ''}</td>
       <td>${s.CATEGORIA || ''}</td>
       <td>${formatarMoeda(s.PRECO_BASE)}</td>
-      <td>${s.ATIVO}</td>
+      <td>${s.ATIVO || ''}</td>
     `;
     tbody.appendChild(tr);
   });
@@ -594,11 +601,3 @@ async function atualizarResumoFinanceiro() {
     alert('Erro ao atualizar resumo financeiro. Verifique o console.');
   }
 }
-
-
-
-
-
-
-
-
