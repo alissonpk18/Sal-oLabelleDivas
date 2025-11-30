@@ -195,6 +195,55 @@ async function apiPost(tipoRegistro, payload) {
 
   return data;
 }
+// Fluxograma (apiGet):
+// Entrada → action + params + options{throwOnError}
+//   → monta URL com action/params e faz fetch GET
+//   → se HTTP erro: lança erro OU retorna {sucesso:false} (conforme throwOnError)
+//   → se sucesso=false na API: idem acima
+// Saída → objeto data (sempre) ou exceção, conforme throwOnError
+// Versão 1.9 — 30/11/2025 / Mudança: suporte a throwOnError para usar com Promise.allSettled
+
+async function apiGet(action, params = {}, options = {}) {
+  const { throwOnError = true } = options;
+
+  const url = new URL(API_URL);
+  url.searchParams.set('action', action);
+  Object.entries(params).forEach(([k, v]) => {
+    if (v !== undefined && v !== null) {
+      url.searchParams.set(k, v);
+    }
+  });
+
+  console.log('[apiGet] URL:', url.toString());
+
+  const resp = await fetch(url.toString());
+  if (!resp.ok) {
+    const err = new Error(`HTTP ${resp.status} - ${resp.statusText}`);
+    console.error('[apiGet] ERRO HTTP:', err);
+
+    if (throwOnError) {
+      throw err;
+    }
+    // modo tolerante: devolve objeto de erro em vez de lançar
+    return { sucesso: false, mensagem: err.message };
+  }
+
+  const data = await resp.json();
+  console.log('[apiGet] resposta:', data);
+
+  if (!data.sucesso) {
+    const err = new Error(data.mensagem || 'Erro retornado pela API.');
+    console.error('[apiGet] ERRO lógico:', err);
+
+    if (throwOnError) {
+      throw err;
+    }
+    // modo tolerante: devolve resposta mesmo com sucesso=false
+    return data;
+  }
+
+  return data;
+}
 
 // =============================
 // CACHE EM MEMÓRIA
@@ -635,14 +684,7 @@ async function atualizarResumoFinanceiro() {
   }
 }
 
-// =============================
-// INICIALIZAÇÃO GERAL
-// =============================
 
-document.addEventListener('DOMContentLoaded', () => {
-  console.log('[INFO] DOM carregado, iniciando configuração de login...');
-  configurarLogin();
-});
 
 
 
