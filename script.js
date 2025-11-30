@@ -193,9 +193,18 @@ function aplicarRoleNaInterface() {
 async function posLoginCarregarApp() {
   try {
     console.log('[LOGIN] Pós-login: carregando dados e eventos...');
+
+    // carrega clientes, serviços, atendimentos e despesas
     await carregarDadosIniciais();
+
+    // liga os eventos de todos os formulários
     inicializarEventosFormularios();
-    inicializarResumoFinanceiro();
+
+    // só o admin vê e atualiza o resumo financeiro
+    if (currentRole === 'admin') {
+      inicializarResumoFinanceiro();
+    }
+
     console.log('[LOGIN] Pós-login concluído.');
   } catch (err) {
     console.error('[ERRO] ao carregar dados iniciais após login:', err);
@@ -600,4 +609,5 @@ async function atualizarResumoFinanceiro() {
     alert('Erro ao atualizar resumo financeiro. Verifique o console.');
   }
 }
+
 
