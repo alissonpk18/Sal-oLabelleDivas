@@ -245,96 +245,7 @@ async function apiGet(action, params = {}, options = {}) {
   return data;
 }
 
-// =============================
-// CACHE EM MEMÓRIA
-// =============================
 
-let cacheClientes     = [];
-let cacheServicos     = [];
-let cacheAtendimentos = [];
-let cacheDespesas     = [];
-
-// =============================
-// LOGIN E CONTROLE DE INTERFACE
-// =============================
-
-function aplicarRoleNaInterface() {
-  // admin: vê tudo
-  // cadastro: vê apenas o formulário de atendimento
-  const isCadastro = currentRole === 'cadastro';
-
-  const elementosRestritos = [
-    document.querySelector('section.mb-3'), // botões Novo Cliente / Novo Serviço / Despesa
-    document.getElementById('secNovoCliente'),
-    document.getElementById('secNovoServico'),
-    document.getElementById('secNovaDespesa'),
-    document.getElementById('secListaClientes'),
-    document.getElementById('secListaServicos'),
-    document.getElementById('secListaDespesas'),
-    document.getElementById('secHistorico')
-  ];
-
-  elementosRestritos.forEach(el => {
-    if (!el) return;
-    if (isCadastro) {
-      el.classList.add('d-none');
-    } else {
-      el.classList.remove('d-none');
-    }
-  });
-}
-
-function configurarLogin() {
-  const loginForm    = document.getElementById('loginForm');
-  const loginUser    = document.getElementById('loginUsuario');
-  const loginSenha   = document.getElementById('loginSenha');
-  const loginErro    = document.getElementById('loginErro');
-  const loginWrapper = document.getElementById('loginWrapper');
-  const appMain      = document.getElementById('appMain');
-
-  if (!loginForm || !loginUser || !loginSenha || !loginWrapper || !appMain) {
-    console.error('[ERRO] Elementos de login não encontrados no HTML.');
-    return;
-  }
-
-  console.log('[INFO] Login configurado.');
-
-  loginForm.addEventListener('submit', async (ev) => {
-    ev.preventDefault();
-
-    const usuario = (loginUser.value || '').trim().toLowerCase();
-    const senha   = (loginSenha.value || '').trim();
-
-    console.log('[LOGIN] Tentativa de login:', usuario);
-
-    const userCfg = LOGIN_USERS[usuario];
-
-    if (!userCfg || senha !== LOGIN_SENHA) {
-      console.warn('[LOGIN] Falha de credenciais.');
-      loginErro.classList.remove('d-none');
-      return;
-    }
-
-    loginErro.classList.add('d-none');
-    currentRole = userCfg.role;
-
-    // Esconde tela de login, mostra app
-    loginWrapper.classList.add('d-none');
-    appMain.classList.remove('d-none');
-
-    aplicarRoleNaInterface();
-
-    // Carrega dados iniciais e configura eventos
-    try {
-      await carregarDadosIniciais();
-      inicializarEventosFormularios();
-      inicializarResumoFinanceiro();
-    } catch (err) {
-      console.error('[ERRO] ao carregar dados iniciais após login:', err);
-      alert('Erro ao carregar dados iniciais. Verifique o console.');
-    }
-  });
-}
 
 // =============================
 // CARREGAMENTO INICIAL
@@ -683,6 +594,7 @@ async function atualizarResumoFinanceiro() {
     alert('Erro ao atualizar resumo financeiro. Verifique o console.');
   }
 }
+
 
 
 
